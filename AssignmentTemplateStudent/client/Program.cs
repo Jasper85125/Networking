@@ -39,19 +39,25 @@ class ClientUDP
     {
 
         //TODO: [Create endpoints and socket]
-        if (setting == null || string.IsNullOrEmpty(setting.ServerIPAddress) || string.IsNullOrEmpty(setting.ClientIPAddress))
+        if (setting == null || string.IsNullOrEmpty(setting.ClientIPAddress) || string.IsNullOrEmpty(setting.ServerIPAddress))
         {
-            throw new InvalidOperationException("Invalid configuration settings.");
+            throw new InvalidOperationException("Invalid settings in configuration file.");
         }
 
-        IPEndPoint serverEndPoint = new IPEndPoint(IPAddress.Parse(setting.ServerIPAddress), setting.ServerPortNumber);
-        IPEndPoint clientEndPoint = new IPEndPoint(IPAddress.Parse(setting.ClientIPAddress), setting.ClientPortNumber);
+        IPAddress clientIPAddress = IPAddress.Parse(setting.ClientIPAddress);
+        int clientPortNumber = setting.ClientPortNumber;
+        IPEndPoint clientEndPoint = new IPEndPoint(clientIPAddress, clientPortNumber);
 
-        Socket clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-        clientSocket.Bind(clientEndPoint);
+        IPAddress serverIPAddress = IPAddress.Parse(setting.ServerIPAddress);
+        int serverPortNumber = setting.ServerPortNumber;
+        IPEndPoint serverEndPoint = new IPEndPoint(serverIPAddress, serverPortNumber);
 
 
         //TODO: [Create and send HELLO]
+        UdpClient client = new UdpClient(clientEndPoint);
+        byte[] hello = Encoding.ASCII.GetBytes("HELLO");
+        client.Send(hello, hello.Length, serverEndPoint);
+
 
         //TODO: [Receive and print Welcome from server]
 
