@@ -10,7 +10,7 @@ using System.Text.Json;
 
 using LibData;
 
-// ReceiveFrom();
+//ReceiveFrom();
 class Program
 {
     static void Main(string[] args)
@@ -35,10 +35,11 @@ class ServerUDP
     static Setting? setting = JsonSerializer.Deserialize<Setting>(configContent);
 
     // TODO: [Read the JSON file and return the list of DNSRecords]
+    static string recordsFile = @"../DNSrecords.json";
+    static string recordsContent = File.ReadAllText(recordsFile);
+    static List<DNSRecord>? records = JsonSerializer.Deserialize<List<DNSRecord>>(recordsContent);
 
-
-
-
+    
     public static void start()
     {
 
