@@ -1,6 +1,6 @@
 {
     "ServerPortNumber": 3000,
-    "ServerIPAddress": "145.112.114.119",
+    "ServerIPAddress": "192.168.1.1",
     "ClientPortNumber": 3000,
-    "ClientIPAddress": "145.112.114.119"
+    "ClientIPAddress": "192.168.1.1"
 }
