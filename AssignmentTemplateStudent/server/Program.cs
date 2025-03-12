@@ -66,12 +66,6 @@ class ServerUDP
 
         // TODO:[Receive and print a received Message from the client]
 
-        UdpClient server = new UdpClient(serverEndPoint);
-        IPEndPoint remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
-        byte[] receivedMessage = server.Receive(ref clientEndPoint);
-        string message = Encoding.ASCII.GetString(receivedMessage);
-        Console.WriteLine($"Received: {message}");
-
 
         // TODO:[Receive and print Hello]
 
