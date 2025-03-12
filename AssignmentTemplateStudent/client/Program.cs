@@ -65,7 +65,24 @@ namespace client
             Console.WriteLine("HELLO message sent to the server.");
 
             //TODO: [Receive and print Welcome from server]
+            IPEndPoint remoteEndpoint = new(IPAddress.Any, 0);
+            byte[] receivedBytes = udpClient.Receive(ref remoteEndpoint);
+            string receivedMessageJson = Encoding.ASCII.GetString(receivedBytes);
 
+            // Deserialize the message
+            Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
+
+            // Print the received message
+            if (receivedMessage != null && receivedMessage.MsgType == MessageType.Welcome)
+            {
+                Console.WriteLine($"Received message from server: {receivedMessage.MsgType}");
+                Console.WriteLine($"Message ID: {receivedMessage.MsgId}");
+                Console.WriteLine($"Content: {receivedMessage.Content}");
+            }
+            else
+            {
+                Console.WriteLine("Received an invalid or unexpected message.");
+            }
 
             // TODO: [Create and send DNSLookup Message]
 
