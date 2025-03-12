@@ -51,20 +51,14 @@ class ServerUDP
         IPEndPoint serverEndpoint = new IPEndPoint(IPAddress.Parse(setting.ServerIPAddress),setting.ServerPortNumber);
         IPEndPoint clientEndpoint = new IPEndPoint(IPAddress.Parse(setting.ClientIPAddress),setting.ClientPortNumber);
         
-
-        
-        
-
-        // IPAddress clientIPAddress = IPAddress.Parse(setting.ClientIPAddress);
-        // int clientPortNumber = setting.ClientPortNumber;
-        // IPEndPoint clientEndPoint = new IPEndPoint(clientIPAddress, clientPortNumber);
-
-        // IPAddress serverIPAddress = IPAddress.Parse(setting.ServerIPAddress);
-        // int serverPortNumber = setting.ServerPortNumber;
-        // IPEndPoint serverEndPoint = new IPEndPoint(serverIPAddress, serverPortNumber);
-
+        Socket listener = new(serverEndpoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+        listener.Bind(serverEndpoint);
 
         // TODO:[Receive and print a received Message from the client]
+        byte[] buffer = new byte[1024];
+        int bytesReceived = listener.Receive(buffer);
+        string message = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
+        Console.WriteLine(message);
 
 
         // TODO:[Receive and print Hello]
