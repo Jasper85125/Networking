@@ -51,6 +51,8 @@ class ServerUDP
         IPEndPoint serverEndpoint = new IPEndPoint(IPAddress.Parse(setting.ServerIPAddress),setting.ServerPortNumber);
         IPEndPoint clientEndpoint = new IPEndPoint(IPAddress.Parse(setting.ClientIPAddress),setting.ClientPortNumber);
         
+        Socket listener = new(serverEndpoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+        listener.Bind(serverEndpoint);
 
         
         
@@ -66,11 +68,15 @@ class ServerUDP
 
         // TODO:[Receive and print a received Message from the client]
 
-        UdpClient server = new UdpClient(serverEndPoint);
-        IPEndPoint remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
-        byte[] receivedMessage = server.Receive(ref clientEndPoint);
-        string message = Encoding.ASCII.GetString(receivedMessage);
-        Console.WriteLine($"Received: {message}");
+        byte[] buffer = new byte[1024];
+
+        while (true)
+        {
+            int receivedBytes = listener.ReceiveFrom(buffer, ref clientEndpoint);
+            string receivedData = Encoding.UTF8.GetString(buffer, 0, receivedBytes);
+
+            Console.WriteLine($"Received from {clientEndpoint}: {receivedData}");
+        }
 
 
         // TODO:[Receive and print Hello]

@@ -44,19 +44,26 @@ class ClientUDP
             throw new InvalidOperationException("Invalid settings in configuration file.");
         }
 
-        IPAddress clientIPAddress = IPAddress.Parse(setting.ClientIPAddress);
-        int clientPortNumber = setting.ClientPortNumber;
-        IPEndPoint clientEndPoint = new IPEndPoint(clientIPAddress, clientPortNumber);
+        IPEndPoint serverEndpoint = new IPEndPoint(IPAddress.Parse(setting.ServerIPAddress),setting.ServerPortNumber);
+        IPEndPoint clientEndpoint = new IPEndPoint(IPAddress.Parse(setting.ClientIPAddress),setting.ClientPortNumber);
+        
+        Socket listener = new(clientEndpoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+        listener.Bind(clientEndpoint);
 
-        IPAddress serverIPAddress = IPAddress.Parse(setting.ServerIPAddress);
-        int serverPortNumber = setting.ServerPortNumber;
-        IPEndPoint serverEndPoint = new IPEndPoint(serverIPAddress, serverPortNumber);
+
+        // IPAddress clientIPAddress = IPAddress.Parse(setting.ClientIPAddress);
+        // int clientPortNumber = setting.ClientPortNumber;
+        // IPEndPoint clientEndPoint = new IPEndPoint(clientIPAddress, clientPortNumber);
+
+        // IPAddress serverIPAddress = IPAddress.Parse(setting.ServerIPAddress);
+        // int serverPortNumber = setting.ServerPortNumber;
+        // IPEndPoint serverEndPoint = new IPEndPoint(serverIPAddress, serverPortNumber);
 
 
         //TODO: [Create and send HELLO]
-        UdpClient client = new UdpClient(clientEndPoint);
-        byte[] hello = Encoding.ASCII.GetBytes("HELLO");
-        client.Send(hello, hello.Length, serverEndPoint);
+        // UdpClient client = new UdpClient(clientEndPoint);
+        // byte[] hello = Encoding.ASCII.GetBytes("HELLO");
+        // client.Send(hello, hello.Length, serverEndPoint);
 
 
         //TODO: [Receive and print Welcome from server]
