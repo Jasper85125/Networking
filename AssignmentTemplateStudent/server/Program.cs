@@ -70,8 +70,6 @@ class ServerUDP
         // TODO:[Send Welcome to the client]
         if (receivedMessage != null && receivedMessage.MsgType == MessageType.Hello)
         {
-            Console.WriteLine("Received Hello message from client.");
-
             // Create a Welcome message
             Message welcomeMessage = new()
             {
