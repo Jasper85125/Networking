@@ -60,6 +60,8 @@ class ClientUDP
 
 
         //TODO: [Receive and print Welcome from server]
+        byte[] welcome = client.Receive(ref serverEndPoint);
+        Console.WriteLine(Encoding.ASCII.GetString(welcome));
 
         // TODO: [Create and send DNSLookup Message]
 
