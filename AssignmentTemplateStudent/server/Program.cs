@@ -68,16 +68,6 @@ class ServerUDP
 
         // TODO:[Receive and print a received Message from the client]
 
-        byte[] buffer = new byte[1024];
-
-        while (true)
-        {
-            int receivedBytes = listener.ReceiveFrom(buffer, ref clientEndpoint);
-            string receivedData = Encoding.UTF8.GetString(buffer, 0, receivedBytes);
-
-            Console.WriteLine($"Received from {clientEndpoint}: {receivedData}");
-        }
-
 
         // TODO:[Receive and print Hello]
 
