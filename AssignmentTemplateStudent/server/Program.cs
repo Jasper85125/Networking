@@ -35,28 +35,33 @@ class ServerUDP
     static Setting? setting = JsonSerializer.Deserialize<Setting>(configContent);
 
     // TODO: [Read the JSON file and return the list of DNSRecords]
-    static string recordsFile = @"../DNSrecords.json";
+    static string recordsFile = @"./DNSrecords.json";
     static string recordsContent = File.ReadAllText(recordsFile);
     static List<DNSRecord>? records = JsonSerializer.Deserialize<List<DNSRecord>>(recordsContent);
 
     
     public static void start()
     {
-
-
         // TODO: [Create a socket and endpoints and bind it to the server IP address and port number]
         if (setting == null || string.IsNullOrEmpty(setting.ClientIPAddress) || string.IsNullOrEmpty(setting.ServerIPAddress))
         {
             throw new InvalidOperationException("Invalid settings in configuration file.");
         }
 
-        IPAddress clientIPAddress = IPAddress.Parse(setting.ClientIPAddress);
-        int clientPortNumber = setting.ClientPortNumber;
-        IPEndPoint clientEndPoint = new IPEndPoint(clientIPAddress, clientPortNumber);
+        IPEndPoint serverEndpoint = new IPEndPoint(IPAddress.Parse(setting.ServerIPAddress),setting.ServerPortNumber);
+        IPEndPoint clientEndpoint = new IPEndPoint(IPAddress.Parse(setting.ClientIPAddress),setting.ClientPortNumber);
+        
 
-        IPAddress serverIPAddress = IPAddress.Parse(setting.ServerIPAddress);
-        int serverPortNumber = setting.ServerPortNumber;
-        IPEndPoint serverEndPoint = new IPEndPoint(serverIPAddress, serverPortNumber);
+        
+        
+
+        // IPAddress clientIPAddress = IPAddress.Parse(setting.ClientIPAddress);
+        // int clientPortNumber = setting.ClientPortNumber;
+        // IPEndPoint clientEndPoint = new IPEndPoint(clientIPAddress, clientPortNumber);
+
+        // IPAddress serverIPAddress = IPAddress.Parse(setting.ServerIPAddress);
+        // int serverPortNumber = setting.ServerPortNumber;
+        // IPEndPoint serverEndPoint = new IPEndPoint(serverIPAddress, serverPortNumber);
 
 
         // TODO:[Receive and print a received Message from the client]
