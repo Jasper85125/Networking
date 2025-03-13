@@ -65,9 +65,17 @@ namespace client
             Console.WriteLine("HELLO message sent to the server.");
 
             //TODO: [Receive and print Welcome from server]
-            IPEndPoint remoteEndpoint = new(IPAddress.Any, 0);
-            byte[] receivedBytes = udpClient.Receive(ref remoteEndpoint);
+            byte[] receivedBytes = udpClient.Receive(ref serverEndPoint);
+            
             string receivedMessageJson = Encoding.ASCII.GetString(receivedBytes);
+            if (receivedMessageJson == null)
+            {
+                throw new InvalidOperationException("Received message is null.");
+            }
+            else
+            {
+                Console.WriteLine($"Received message from server: {receivedMessageJson}");
+            }
 
             // Deserialize the message
             Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
