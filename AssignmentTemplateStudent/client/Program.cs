@@ -129,7 +129,7 @@ namespace client
                     Console.WriteLine($"DNSLookup message for {record.Name} sent to the server.");
 
                     //TODO: [Receive and print DNSLookupReply from server]
-                    byte[] dnsLookupReplyBytes = udpClient.Receive(ref remoteEndpoint);
+                    byte[] dnsLookupReplyBytes = udpClient.Receive(ref serverEndPoint);
                     string dnsLookupReplyJson = Encoding.ASCII.GetString(dnsLookupReplyBytes);
 
                     // Deserialize the DNSLookupReply message
