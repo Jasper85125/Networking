@@ -101,54 +101,52 @@ class ServerUDP
             Console.WriteLine($"Content: {dnsLookupMessage.Content}");
         }
 
-
-        // TODO:[Query the DNSRecord in Json file]
+        // Query the DNSRecord in Json file
         if (dnsLookupMessage != null && dnsLookupMessage.MsgType == MessageType.DNSLookup)
         {
-            string? lookupName = dnsLookupMessage.Content as string;
+            string? lookupName = dnsLookupMessage.Content?.ToString();
             if (!string.IsNullOrEmpty(lookupName) && records != null)
             {
-                DNSRecord? foundRecord = records.FirstOrDefault(record => record.Name.Equals(lookupName, StringComparison.OrdinalIgnoreCase));
+            DNSRecord? foundRecord = records.FirstOrDefault(record => record.Name.Equals(lookupName, StringComparison.OrdinalIgnoreCase));
 
-                if (foundRecord != null)
+            if (foundRecord != null)
+            {
+                // If found Send DNSLookupReply containing the DNSRecord
+                Message dnsLookupReplyMessage = new()
                 {
-                    // TODO:[If found Send DNSLookupReply containing the DNSRecord]
-                    Message dnsLookupReplyMessage = new()
-                    {
-                        MsgId = dnsLookupMessage.MsgId + 1,
-                        MsgType = MessageType.DNSLookupReply,
-                        Content = foundRecord
-                    };
+                MsgId = dnsLookupMessage.MsgId + 1,
+                MsgType = MessageType.DNSLookupReply,
+                Content = JsonSerializer.Serialize(foundRecord)
+                };
 
-                    // Serialize the DNSLookupReply message to JSON
-                    string dnsLookupReplyMessageJson = JsonSerializer.Serialize(dnsLookupReplyMessage);
-                    byte[] dnsLookupReplyMessageBytes = Encoding.ASCII.GetBytes(dnsLookupReplyMessageJson);
+                // Serialize the DNSLookupReply message to JSON
+                string dnsLookupReplyMessageJson = JsonSerializer.Serialize(dnsLookupReplyMessage);
+                byte[] dnsLookupReplyMessageBytes = Encoding.ASCII.GetBytes(dnsLookupReplyMessageJson);
 
-                    // Send the DNSLookupReply message to the client
-                    listener.SendTo(dnsLookupReplyMessageBytes, clientEndpoint);
-                    Console.WriteLine("Sent DNSLookupReply message to client.");
-                }
-                else
+                // Send the DNSLookupReply message to the client
+                listener.SendTo(dnsLookupReplyMessageBytes, clientEndpoint);
+                Console.WriteLine("Sent DNSLookupReply message to client.");
+            }
+            else
+            {
+                // If not found Send Error
+                Message errorMessage = new()
                 {
-                    // TODO:[If not found Send Error]
-                    Message errorMessage = new()
-                    {
-                        MsgId = dnsLookupMessage.MsgId + 1,
-                        MsgType = MessageType.Error,
-                        Content = "DNS record not found"
-                    };
+                MsgId = dnsLookupMessage.MsgId + 1,
+                MsgType = MessageType.Error,
+                Content = "DNS record not found"
+                };
 
-                    // Serialize the Error message to JSON
-                    string errorMessageJson = JsonSerializer.Serialize(errorMessage);
-                    byte[] errorMessageBytes = Encoding.ASCII.GetBytes(errorMessageJson);
+                // Serialize the Error message to JSON
+                string errorMessageJson = JsonSerializer.Serialize(errorMessage);
+                byte[] errorMessageBytes = Encoding.ASCII.GetBytes(errorMessageJson);
 
-                    // Send the Error message to the client
-                    listener.SendTo(errorMessageBytes, clientEndpoint);
-                    Console.WriteLine("Sent Error message to client.");
-                }
+                // Send the Error message to the client
+                listener.SendTo(errorMessageBytes, clientEndpoint);
+                Console.WriteLine("Sent Error message to client.");
+            }
             }
         }
-
 
         // TODO:[Receive Ack about correct DNSLookupReply from the client]
 

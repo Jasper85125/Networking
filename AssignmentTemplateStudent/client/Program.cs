@@ -92,45 +92,61 @@ namespace client
                 Console.WriteLine("Received an invalid or unexpected message.");
             }
 
-            // TODO: [Create and send DNSLookup Message]
+            // TODO: [Create and send DNSLookup Messages using DNSrecords]
             if (receivedMessage == null)
             {
                 throw new InvalidOperationException("Received message is null.");
             }
 
-            Message dnsLookupMessage = new()
+            // Load DNS records from JSON file
+            string dnsRecordsFile = @"../server/DNSrecords.json";
+            string dnsRecordsContent = File.ReadAllText(dnsRecordsFile);
+            var dnsRecords = JsonSerializer.Deserialize<List<DNSRecord>>(dnsRecordsContent);
+
+            if (dnsRecords == null)
             {
-                MsgId = receivedMessage.MsgId + 1,
-                MsgType = MessageType.DNSLookup,
-                Content = "www.Google.com"
-            };
-
-            // Serialize the message to JSON
-            string dnsLookupMessageJson = JsonSerializer.Serialize(dnsLookupMessage);
-            byte[] dnsLookupMessageBytes = Encoding.ASCII.GetBytes(dnsLookupMessageJson);
-
-            // Send the DNSLookup message to the server
-            udpClient.Send(dnsLookupMessageBytes, dnsLookupMessageBytes.Length, serverEndPoint);
-
-            Console.WriteLine("DNSLookup message sent to the server.");
-
-            //TODO: [Receive and print DNSLookupReply from server]
-            byte[] dnsLookupReplyBytes = udpClient.Receive(ref remoteEndpoint);
-            string dnsLookupReplyJson = Encoding.ASCII.GetString(dnsLookupReplyBytes);
-
-            // Deserialize the DNSLookupReply message
-            Message? dnsLookupReplyMessage = JsonSerializer.Deserialize<Message>(dnsLookupReplyJson);
-
-            // Print the received DNSLookupReply message
-            if (dnsLookupReplyMessage != null && dnsLookupReplyMessage.MsgType == MessageType.DNSLookupReply)
-            {
-                Console.WriteLine($"Received DNSLookupReply from server: {dnsLookupReplyMessage.MsgType}");
-                Console.WriteLine($"Message ID: {dnsLookupReplyMessage.MsgId}");
-                Console.WriteLine($"Content: {dnsLookupReplyMessage.Content}");
+                throw new InvalidOperationException("Failed to load DNS records.");
             }
-            else
+
+            foreach (var record in dnsRecords)
             {
-                Console.WriteLine("Received an invalid or unexpected message.");
+                if (record.Type == "A")
+                {
+                    Message dnsLookupMessage = new()
+                    {
+                        MsgId = receivedMessage.MsgId + 1,
+                        MsgType = MessageType.DNSLookup,
+                        Content = record.Name
+                    };
+
+                    // Serialize the message to JSON
+                    string dnsLookupMessageJson = JsonSerializer.Serialize(dnsLookupMessage);
+                    byte[] dnsLookupMessageBytes = Encoding.ASCII.GetBytes(dnsLookupMessageJson);
+
+                    // Send the DNSLookup message to the server
+                    udpClient.Send(dnsLookupMessageBytes, dnsLookupMessageBytes.Length, serverEndPoint);
+
+                    Console.WriteLine($"DNSLookup message for {record.Name} sent to the server.");
+
+                    //TODO: [Receive and print DNSLookupReply from server]
+                    byte[] dnsLookupReplyBytes = udpClient.Receive(ref remoteEndpoint);
+                    string dnsLookupReplyJson = Encoding.ASCII.GetString(dnsLookupReplyBytes);
+
+                    // Deserialize the DNSLookupReply message
+                    Message? dnsLookupReplyMessage = JsonSerializer.Deserialize<Message>(dnsLookupReplyJson);
+
+                    // Print the received DNSLookupReply message
+                    if (dnsLookupReplyMessage != null && dnsLookupReplyMessage.MsgType == MessageType.DNSLookupReply)
+                    {
+                        Console.WriteLine($"Received DNSLookupReply from server: {dnsLookupReplyMessage.MsgType}");
+                        Console.WriteLine($"Message ID: {dnsLookupReplyMessage.MsgId}");
+                        Console.WriteLine($"Content: {dnsLookupReplyMessage.Content}");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Received an invalid or unexpected message.");
+                    }
+                }
             }
 
             //TODO: [Send Acknowledgment to Server]
