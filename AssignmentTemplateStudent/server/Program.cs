@@ -114,9 +114,9 @@ class ServerUDP
                 // If found Send DNSLookupReply containing the DNSRecord
                 Message dnsLookupReplyMessage = new()
                 {
-                MsgId = dnsLookupMessage.MsgId + 1,
-                MsgType = MessageType.DNSLookupReply,
-                Content = JsonSerializer.Serialize(foundRecord)
+                    MsgId = dnsLookupMessage.MsgId + 1,
+                    MsgType = MessageType.DNSLookupReply,
+                    Content = JsonSerializer.Serialize(foundRecord)
                 };
 
                 // Serialize the DNSLookupReply message to JSON
@@ -149,11 +149,48 @@ class ServerUDP
         }
 
         // TODO:[Receive Ack about correct DNSLookupReply from the client]
-
+        byte[] ackBuffer = new byte[1024];
+        int ackBytesReceived = listener.Receive(ackBuffer);
+        string ackMessageJson = Encoding.ASCII.GetString(ackBuffer, 0, ackBytesReceived);
+        Console.WriteLine("Received Ack message: " + ackMessageJson);
 
         // TODO:[If no further requests receieved send End to the client]
+        Message? ackMessage = JsonSerializer.Deserialize<Message>(ackMessageJson);
+        if (ackMessage != null && ackMessage.MsgType == MessageType.Ack)
+        {
+            Console.WriteLine("Received Ack message from client.");
+            Console.WriteLine($"Message ID: {ackMessage.MsgId}");
+            Console.WriteLine($"Content: {ackMessage.Content}");
 
+            // Create an End message
+            Message endMessage = new()
+            {
+                MsgId = ackMessage.MsgId + 1,
+                MsgType = MessageType.End,
+                Content = null
+            };
+
+            // Serialize the End message to JSON
+            string endMessageJson = JsonSerializer.Serialize(endMessage);
+            byte[] endMessageBytes = Encoding.ASCII.GetBytes(endMessageJson);
+
+            // Send the End message to the client
+            listener.SendTo(endMessageBytes, clientEndpoint);
+            Console.WriteLine("Sent End message to client.");
+        }
+        Message errorMessageSecond = new()
+        {
+            MsgId = dnsLookupMessage.MsgId + 1,
+            MsgType = MessageType.Error,
+            Content = "DNS record not found"
+        };
+
+        // Serialize the Error message to JSON
+        string errorMessageJsonSecond = JsonSerializer.Serialize(errorMessageSecond);
+        byte[] errorMessageBytesSecond = Encoding.ASCII.GetBytes(errorMessageJsonSecond);
+
+        // Send the Error message to the client
+        listener.SendTo(errorMessageBytesSecond, clientEndpoint);
+        Console.WriteLine("Sent Error message to client.");
     }
-
-
 }
