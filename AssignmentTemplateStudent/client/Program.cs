@@ -146,49 +146,38 @@ namespace client
                     {
                         Console.WriteLine("Received an invalid or unexpected message.");
                     }
+
+                    //TODO: [Send Acknowledgment to Server]
+                    Message ackMessage = new()
+                    {
+                        MsgId = receivedMessage.MsgId + 1,
+                        MsgType = MessageType.Ack,
+                        Content = null
+                    };
+                    string ackLookupMessageJson = JsonSerializer.Serialize(ackMessage);
+                    byte[] ackLookupMessageBytes = Encoding.ASCII.GetBytes(ackLookupMessageJson);
+
+                    udpClient.Send(ackLookupMessageBytes, ackLookupMessageBytes.Length, serverEndPoint);
+
+                    Console.WriteLine($"Acknowlegement sent to the server.");
                 }
             }
 
-            //TODO: [Send Acknowledgment to Server]
-            Message ackMessage = new()
-            {
-                MsgId = receivedMessage.MsgId + 1,
-                MsgType = MessageType.Ack,
-                Content = null
-            };
-            string ackLookupMessageJson = JsonSerializer.Serialize(ackMessage);
-            byte[] ackLookupMessageBytes = Encoding.ASCII.GetBytes(ackLookupMessageJson);
-
-            udpClient.Send(ackLookupMessageBytes, ackLookupMessageBytes.Length, serverEndPoint);
-
-            Console.WriteLine($"Acknowlegement sent to the server.");
-
             // TODO: [Send next DNSLookup to server]
-            // Load DNS records from JSON file
-            foreach (var record in dnsRecords)
-            {
-                if (record.Type == "A")
-                {
-                    Message dnsLookupMessage = new()
-                    {
-                        MsgId = receivedMessage.MsgId + 1,
-                        MsgType = MessageType.DNSLookup,
-                        Content = record.Name
-                    };
-
-                    // Serialize the message to JSON
-                    string dnsLookupMessageJson = JsonSerializer.Serialize(dnsLookupMessage);
-                    byte[] dnsLookupMessageBytes = Encoding.ASCII.GetBytes(dnsLookupMessageJson);
-
-                    // Send the DNSLookup message to the server
-                    udpClient.Send(dnsLookupMessageBytes, dnsLookupMessageBytes.Length, serverEndPoint);
-
-                    Console.WriteLine($"DNSLookup message for {record.Name} sent to the server.");
-                }
-
             // repeat the process until all DNSLoopkups (correct and incorrect onces) are sent to server and the replies with DNSLookupReply
 
             //TODO: [Receive and print End from server]
+            byte[] endBytes = udpClient.Receive(ref serverEndPoint);
+            string endMessageJson = Encoding.ASCII.GetString(endBytes);
+            if (endMessageJson == null)
+            {
+                throw new InvalidOperationException("Received message is null.");
+            }
+            else
+            {
+                Console.WriteLine($"Received message from server: {endMessageJson}");
+            }
+
         }
     }
 }
