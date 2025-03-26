@@ -50,40 +50,52 @@ class ServerUDP
 
         using Socket listener = new(serverEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
         listener.Bind(serverEndPoint);
+        int latestMsgId = 0;
 
         while (true)
         {
-            byte[] buffer = new byte[1024];
-            EndPoint remoteEndPoint = clientEndPoint;
-            int bytesReceived = listener.ReceiveFrom(buffer, ref remoteEndPoint);
-
-            string receivedMessageJson = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
-            Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
-
-            if (receivedMessage != null)
+            try
             {
-                Console.WriteLine($"Received message: {receivedMessage.MsgType}");
+                byte[] buffer = new byte[1024];
+                EndPoint remoteEndPoint = clientEndPoint;
+                int bytesReceived = listener.ReceiveFrom(buffer, ref remoteEndPoint);
 
-                switch (receivedMessage.MsgType)
+                string receivedMessageJson = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
+                Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
+
+                if (receivedMessage != null)
                 {
-                    case MessageType.Hello:
-                        SendWelcomeMessage(listener, remoteEndPoint, receivedMessage.MsgId);
-                        break;
-                    case MessageType.DNSLookup:
-                        HandleDNSLookup(listener, remoteEndPoint, receivedMessage);
-                        break;
-                    case MessageType.Ack:
-                        Console.WriteLine("Received ACK from client.");
-                        break;
-                    default:
-                        Console.WriteLine("Received an invalid or unexpected message.");
-                        break;
+                    Console.WriteLine($"Received message: {receivedMessage.MsgType}");
+                    latestMsgId = receivedMessage.MsgId;
+
+                    switch (receivedMessage.MsgType)
+                    {
+                        case MessageType.Hello:
+                            latestMsgId = SendWelcomeMessage(listener, remoteEndPoint, receivedMessage.MsgId);
+                            break;
+                        case MessageType.DNSLookup:
+                            listener.ReceiveTimeout = 1000;
+                            latestMsgId = HandleDNSLookup(listener, remoteEndPoint, receivedMessage);
+                            break;
+                        case MessageType.Ack:
+                            Console.WriteLine("Received ACK from client.");
+                            break;
+                        default:
+                            Console.WriteLine("Received an invalid or unexpected message.");
+                            break;
+                    }
                 }
+            }
+            catch (SocketException)
+            {
+                SendEndMessage(listener, clientEndPoint, latestMsgId);
+                listener.ReceiveTimeout = 0;
+                
             }
         }
     }
 
-    private void SendWelcomeMessage(Socket listener, EndPoint remoteEndPoint, int msgId)
+    private int SendWelcomeMessage(Socket listener, EndPoint remoteEndPoint, int msgId)
     {
         Message welcomeMessage = new()
         {
@@ -97,9 +109,10 @@ class ServerUDP
 
         listener.SendTo(welcomeMessageBytes, remoteEndPoint);
         Console.WriteLine("Sent WELCOME message to client.");
+        return msgId + 1;
     }
 
-    private void HandleDNSLookup(Socket listener, EndPoint remoteEndPoint, Message dnsLookupMessage)
+    private int HandleDNSLookup(Socket listener, EndPoint remoteEndPoint, Message dnsLookupMessage)
     {
         string? lookupName = dnsLookupMessage.Content?.ToString();
         if (!string.IsNullOrEmpty(lookupName) && records != null)
@@ -120,7 +133,25 @@ class ServerUDP
 
                 listener.SendTo(dnsLookupReplyMessageBytes, remoteEndPoint);
                 Console.WriteLine("Sent DNSLookupReply message to client.");
+                return dnsLookupMessage.MsgId + 1;
             }
         }
+        return dnsLookupMessage.MsgId;
+    }
+
+    private void SendEndMessage(Socket listener, EndPoint remoteEndPoint, int msgId)
+    {
+        Message welcomeMessage = new()
+        {
+            MsgId = msgId + 1,
+            MsgType = MessageType.End,
+            Content = "No Lookups anymore"
+        };
+
+        string welcomeMessageJson = JsonSerializer.Serialize(welcomeMessage);
+        byte[] welcomeMessageBytes = Encoding.ASCII.GetBytes(welcomeMessageJson);
+
+        listener.SendTo(welcomeMessageBytes, remoteEndPoint);
+        Console.WriteLine("Sent END message to client.");
     }
 }
