@@ -108,7 +108,7 @@ class ServerUDP
         byte[] welcomeMessageBytes = Encoding.ASCII.GetBytes(welcomeMessageJson);
 
         listener.SendTo(welcomeMessageBytes, remoteEndPoint);
-        Console.WriteLine("Sent WELCOME message to client.");
+        Console.WriteLine("Sent WELCOME message to client.\n");
         return msgId + 1;
     }
 
@@ -132,26 +132,34 @@ class ServerUDP
                 byte[] dnsLookupReplyMessageBytes = Encoding.ASCII.GetBytes(dnsLookupReplyMessageJson);
 
                 listener.SendTo(dnsLookupReplyMessageBytes, remoteEndPoint);
-                Console.WriteLine("Sent DNSLookupReply message to client.");
+                Console.WriteLine("Sent DNSLookupReply message to client.\n");
                 return dnsLookupMessage.MsgId + 1;
             }
+            else
+            {
+                Console.WriteLine("lookupname was not found in DNSrecords.json.\n");
+            }
+        }
+        else
+        {
+            Console.WriteLine("lookupname or DNSrecords.json is empty.\n");
         }
         return dnsLookupMessage.MsgId;
     }
 
     private void SendEndMessage(Socket listener, EndPoint remoteEndPoint, int msgId)
     {
-        Message welcomeMessage = new()
+        Message endMessage = new()
         {
             MsgId = msgId + 1,
             MsgType = MessageType.End,
             Content = "No Lookups anymore"
         };
 
-        string welcomeMessageJson = JsonSerializer.Serialize(welcomeMessage);
-        byte[] welcomeMessageBytes = Encoding.ASCII.GetBytes(welcomeMessageJson);
+        string endMessageJSON = JsonSerializer.Serialize(endMessage);
+        byte[] endMessageBytes = Encoding.ASCII.GetBytes(endMessageJSON);
 
-        listener.SendTo(welcomeMessageBytes, remoteEndPoint);
-        Console.WriteLine("Sent END message to client.");
+        listener.SendTo(endMessageBytes, remoteEndPoint);
+        Console.WriteLine("Sent END message to client.\n");
     }
 }

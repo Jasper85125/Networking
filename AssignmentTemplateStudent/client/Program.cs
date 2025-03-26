@@ -66,7 +66,7 @@ namespace client
             byte[] helloMessageBytes = Encoding.ASCII.GetBytes(helloMessageJson);
 
             udpClient.SendTo(helloMessageBytes, serverEndPoint);
-            Console.WriteLine("HELLO message sent to the server.");
+            Console.WriteLine("HELLO message sent to the server.\n");
         }
 
         private void ReceiveWelcomeMessage(Socket udpClient, IPEndPoint serverEndPoint)
@@ -114,7 +114,7 @@ namespace client
                     byte[] dnsLookupMessageBytes = Encoding.ASCII.GetBytes(dnsLookupMessageJson);
 
                     udpClient.SendTo(dnsLookupMessageBytes, serverEndPoint);
-                    Console.WriteLine($"DNSLookup message for {record.Name} sent to the server.");
+                    Console.WriteLine($"DNSLookup message for {record.Name} sent to the server.\n");
 
                     ReceiveDNSLookupReply(udpClient, serverEndPoint);
                 }
@@ -154,7 +154,7 @@ namespace client
             byte[] ackMessageBytes = Encoding.ASCII.GetBytes(ackMessageJson);
 
             udpClient.SendTo(ackMessageBytes, serverEndPoint);
-            Console.WriteLine("Acknowledgment sent to the server.");
+            Console.WriteLine("Acknowledgment sent to the server.\n");
         }
 
         private void ReceiveEndMessage(Socket udpClient, IPEndPoint serverEndPoint)
