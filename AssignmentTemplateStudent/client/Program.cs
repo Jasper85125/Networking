@@ -49,6 +49,8 @@ namespace client
 
             SendHelloMessage(udpClient, serverEndPoint);
             ReceiveWelcomeMessage(udpClient, serverEndPoint);
+            SendDNSLookupMessagesError(udpClient, serverEndPoint);
+            SendDNSLookupMessagesError(udpClient, serverEndPoint);
             SendDNSLookupMessages(udpClient, serverEndPoint);
             ReceiveEndMessage(udpClient, serverEndPoint);
         }
@@ -101,23 +103,20 @@ namespace client
 
             foreach (var record in dnsRecords)
             {
-                if (record.Type == "A")
+                Message dnsLookupMessage = new()
                 {
-                    Message dnsLookupMessage = new()
-                    {
-                        MsgId = 2,
-                        MsgType = MessageType.DNSLookup,
-                        Content = record.Name
-                    };
+                    MsgId = 2,
+                    MsgType = MessageType.DNSLookup,
+                    Content = record.Name
+                };
 
-                    string dnsLookupMessageJson = JsonSerializer.Serialize(dnsLookupMessage);
-                    byte[] dnsLookupMessageBytes = Encoding.ASCII.GetBytes(dnsLookupMessageJson);
+                string dnsLookupMessageJson = JsonSerializer.Serialize(dnsLookupMessage);
+                byte[] dnsLookupMessageBytes = Encoding.ASCII.GetBytes(dnsLookupMessageJson);
 
-                    udpClient.SendTo(dnsLookupMessageBytes, serverEndPoint);
-                    Console.WriteLine($"DNSLookup message for {record.Name} sent to the server.\n");
+                udpClient.SendTo(dnsLookupMessageBytes, serverEndPoint);
+                Console.WriteLine($"DNSLookup message for {record.Name} sent to the server.\n");
 
-                    ReceiveDNSLookupReply(udpClient, serverEndPoint);
-                }
+                ReceiveDNSLookupReply(udpClient, serverEndPoint);
             }
         }
 
@@ -135,10 +134,33 @@ namespace client
                 Console.WriteLine($"Received DNSLookupReply from server: {receivedMessage.Content}");
                 SendAcknowledgment(udpClient, serverEndPoint, receivedMessage.MsgId);
             }
+            else if (receivedMessage != null && receivedMessage.MsgType == MessageType.Error)
+            {
+                Console.WriteLine($"Received ERROR message from server: {receivedMessage.Content}");
+                SendAcknowledgment(udpClient, serverEndPoint, receivedMessage.MsgId);
+            }
             else
             {
                 Console.WriteLine("Received an invalid or unexpected message.");
             }
+        }
+
+        private void SendDNSLookupMessagesError(Socket udpClient, IPEndPoint serverEndPoint)
+        {
+            Message dnsLookupMessage = new()
+            {
+                MsgId = 2,
+                MsgType = MessageType.DNSLookup,
+                Content = "error"
+            };
+
+            string dnsLookupMessageJson = JsonSerializer.Serialize(dnsLookupMessage);
+            byte[] dnsLookupMessageBytes = Encoding.ASCII.GetBytes(dnsLookupMessageJson);
+
+            udpClient.SendTo(dnsLookupMessageBytes, serverEndPoint);
+            Console.WriteLine("DNSLookup message for error sent to the server.\n");
+
+            ReceiveDNSLookupReply(udpClient, serverEndPoint);
         }
 
         private void SendAcknowledgment(Socket udpClient, IPEndPoint serverEndPoint, int msgId)

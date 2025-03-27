@@ -138,6 +138,19 @@ class ServerUDP
             else
             {
                 Console.WriteLine("lookupname was not found in DNSrecords.json.\n");
+                Message dnsLookupReplyMessage = new()
+                {
+                    MsgId = dnsLookupMessage.MsgId + 1,
+                    MsgType = MessageType.Error,
+                    Content = "Error: Record not found"
+                };
+
+                string dnsLookupReplyMessageJson = JsonSerializer.Serialize(dnsLookupReplyMessage);
+                byte[] dnsLookupReplyMessageBytes = Encoding.ASCII.GetBytes(dnsLookupReplyMessageJson);
+
+                listener.SendTo(dnsLookupReplyMessageBytes, remoteEndPoint);
+                Console.WriteLine("Sent Error Reply message to client.\n");
+                return dnsLookupMessage.MsgId + 1;
             }
         }
         else
