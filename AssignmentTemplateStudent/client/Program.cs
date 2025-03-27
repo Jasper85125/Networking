@@ -36,21 +36,34 @@ namespace client
 
         public void Start()
         {
-            if (setting == null || string.IsNullOrEmpty(setting.ClientIPAddress) || string.IsNullOrEmpty(setting.ServerIPAddress))
+            try
             {
-                throw new InvalidOperationException("Invalid settings in configuration file.");
+                if (setting == null || string.IsNullOrEmpty(setting.ClientIPAddress) || string.IsNullOrEmpty(setting.ServerIPAddress))
+                {
+                    throw new InvalidOperationException("Invalid settings in configuration file.");
+                }
+
+                if (setting.ClientPortNumber == setting.ServerPortNumber)
+                {
+                    throw new InvalidOperationException("Client and server port numbers cannot be the same.");
+                }
+
+                IPEndPoint clientEndPoint = new(IPAddress.Parse(setting.ClientIPAddress), setting.ClientPortNumber);
+                IPEndPoint serverEndPoint = new(IPAddress.Parse(setting.ServerIPAddress), setting.ServerPortNumber);
+
+                using Socket udpClient = new(clientEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+                udpClient.Bind(clientEndPoint);
+
+                SendHelloMessage(udpClient, serverEndPoint);
+                ReceiveWelcomeMessage(udpClient, serverEndPoint);
+                SendDNSLookupMessages(udpClient, serverEndPoint);
+                ReceiveEndMessage(udpClient, serverEndPoint);
             }
-
-            IPEndPoint clientEndPoint = new(IPAddress.Parse(setting.ClientIPAddress), setting.ClientPortNumber);
-            IPEndPoint serverEndPoint = new(IPAddress.Parse(setting.ServerIPAddress), setting.ServerPortNumber);
-
-            using Socket udpClient = new(clientEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-            udpClient.Bind(clientEndPoint);
-
-            SendHelloMessage(udpClient, serverEndPoint);
-            ReceiveWelcomeMessage(udpClient, serverEndPoint);
-            SendDNSLookupMessages(udpClient, serverEndPoint);
-            ReceiveEndMessage(udpClient, serverEndPoint);
+            catch (Exception e)
+            {
+                Console.WriteLine($"Error occurred: {e.Message}");
+                Console.WriteLine($"Error code: {e.HResult}");
+            }
         }
 
         private void SendHelloMessage(Socket udpClient, IPEndPoint serverEndPoint)
@@ -101,23 +114,22 @@ namespace client
 
             foreach (var record in dnsRecords)
             {
-                if (record.Type == "A")
+
+                Message dnsLookupMessage = new()
                 {
-                    Message dnsLookupMessage = new()
-                    {
-                        MsgId = 2,
-                        MsgType = MessageType.DNSLookup,
-                        Content = record.Name
-                    };
+                    MsgId = 2,
+                    MsgType = MessageType.DNSLookup,
+                    Content = record.Name
+                };
 
-                    string dnsLookupMessageJson = JsonSerializer.Serialize(dnsLookupMessage);
-                    byte[] dnsLookupMessageBytes = Encoding.ASCII.GetBytes(dnsLookupMessageJson);
+                string dnsLookupMessageJson = JsonSerializer.Serialize(dnsLookupMessage);
+                byte[] dnsLookupMessageBytes = Encoding.ASCII.GetBytes(dnsLookupMessageJson);
 
-                    udpClient.SendTo(dnsLookupMessageBytes, serverEndPoint);
-                    Console.WriteLine($"DNSLookup message for {record.Name} sent to the server.\n");
+                udpClient.SendTo(dnsLookupMessageBytes, serverEndPoint);
+                Console.WriteLine($"DNSLookup message for {record.Name} sent to the server.\n");
 
-                    ReceiveDNSLookupReply(udpClient, serverEndPoint);
-                }
+                ReceiveDNSLookupReply(udpClient, serverEndPoint);
+
             }
         }
 
