@@ -234,13 +234,17 @@ class ServerUDP
         }
         else
         { 
-            Console.WriteLine("Received an invalid or unexpected message.\n");
+            Console.WriteLine($"Received an invalid or unexpected message. The message ID should be {msgId + 1}\n");
             Message errorMessage = new()
             {
                 MsgId = msgId + 1,
                 MsgType = MessageType.Error,
                 Content = "Error: Invalid message ID"
             };
+            string dnsLookupReplyErrorMessageJson = JsonSerializer.Serialize(errorMessage);
+            byte[] dnsLookupReplyErrorMessageBytes = Encoding.ASCII.GetBytes(dnsLookupReplyErrorMessageJson);
+            listener.SendTo(dnsLookupReplyErrorMessageBytes, remoteEndPoint);
+            Console.WriteLine("Sent Error message to client.\n");
         }
         return msgId + 1;
         

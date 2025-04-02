@@ -137,9 +137,15 @@ namespace client
                 Console.WriteLine($"Received WELCOME message from server: {receivedMessage.MsgId}");
                 return receivedMessage.MsgId;
             }
-            else
+            else if (receivedMessage.MsgType == MessageType.Error)
             {
                 Console.WriteLine("Received an invalid or unexpected message.");
+                Console.WriteLine($"Received {receivedMessage.MsgType}");
+            }
+            else if (receivedMessage.MsgId != msgId + 1)
+            {
+                Console.WriteLine("Received an invalid or unexpected message.");
+                Console.WriteLine($"received message id: {receivedMessage.MsgId}, but should be {msgId + 1}");
             }
             return receivedMessage.MsgId;
         }
