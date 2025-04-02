@@ -36,23 +36,31 @@ namespace client
 
         public void Start()
         {
-            if (setting == null || string.IsNullOrEmpty(setting.ClientIPAddress) || string.IsNullOrEmpty(setting.ServerIPAddress))
+            try
             {
+                if (setting == null || string.IsNullOrEmpty(setting.ClientIPAddress) || string.IsNullOrEmpty(setting.ServerIPAddress))
+                {
+                    throw new InvalidOperationException("Invalid settings in configuration file.");
+                }
+
+                IPEndPoint clientEndPoint = new(IPAddress.Parse(setting.ClientIPAddress), setting.ClientPortNumber);
+                IPEndPoint serverEndPoint = new(IPAddress.Parse(setting.ServerIPAddress), setting.ServerPortNumber);
+
+                using Socket udpClient = new(clientEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+                udpClient.Bind(clientEndPoint);
+
+                SendHelloMessage(udpClient, serverEndPoint);
+                int msgId = ReceiveWelcomeMessage(udpClient, serverEndPoint);
+                msgId = SendDNSLookupMessagesError(udpClient, serverEndPoint, msgId);
+                msgId = SendDNSLookupMessagesError(udpClient, serverEndPoint, msgId);
+                msgId = SendDNSLookupMessages(udpClient, serverEndPoint, msgId);
+                ReceiveEndMessage(udpClient, serverEndPoint);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"An error occurred: {e.Message}");
                 throw new InvalidOperationException("Invalid settings in configuration file.");
             }
-
-            IPEndPoint clientEndPoint = new(IPAddress.Parse(setting.ClientIPAddress), setting.ClientPortNumber);
-            IPEndPoint serverEndPoint = new(IPAddress.Parse(setting.ServerIPAddress), setting.ServerPortNumber);
-
-            using Socket udpClient = new(clientEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-            udpClient.Bind(clientEndPoint);
-
-            SendHelloMessage(udpClient, serverEndPoint);
-            ReceiveWelcomeMessage(udpClient, serverEndPoint);
-            SendDNSLookupMessagesError(udpClient, serverEndPoint);
-            SendDNSLookupMessagesError(udpClient, serverEndPoint);
-            SendDNSLookupMessages(udpClient, serverEndPoint);
-            ReceiveEndMessage(udpClient, serverEndPoint);
         }
 
         private void SendHelloMessage(Socket udpClient, IPEndPoint serverEndPoint)
@@ -71,7 +79,7 @@ namespace client
             Console.WriteLine("HELLO message sent to the server.\n");
         }
 
-        private void ReceiveWelcomeMessage(Socket udpClient, IPEndPoint serverEndPoint)
+        private int ReceiveWelcomeMessage(Socket udpClient, IPEndPoint serverEndPoint)
         {
             byte[] buffer = new byte[1024];
             EndPoint remoteEndPoint = serverEndPoint;
@@ -80,17 +88,20 @@ namespace client
             string receivedMessageJson = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
             Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
 
-            if (receivedMessage != null && receivedMessage.MsgType == MessageType.Welcome)
+            if (receivedMessage != null && receivedMessage.MsgType == MessageType.Welcome && receivedMessage.MsgId == 2)
             {
                 Console.WriteLine($"Received WELCOME message from server: {receivedMessage.Content}");
+                Console.WriteLine($"Received WELCOME message from server: {receivedMessage.MsgId}");
+                return receivedMessage.MsgId;
             }
             else
             {
                 Console.WriteLine("Received an invalid or unexpected message.");
             }
+            return 0;
         }
 
-        private void SendDNSLookupMessages(Socket udpClient, IPEndPoint serverEndPoint)
+        private int SendDNSLookupMessages(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
         {
             string dnsRecordsFile = Path.Combine(AppContext.BaseDirectory, "../../../../server/DNSrecords.json");
             string dnsRecordsContent = File.ReadAllText(dnsRecordsFile);
@@ -105,7 +116,7 @@ namespace client
             {
                 Message dnsLookupMessage = new()
                 {
-                    MsgId = 2,
+                    MsgId = msgId + 1,
                     MsgType = MessageType.DNSLookup,
                     Content = record.Name
                 };
@@ -114,10 +125,14 @@ namespace client
                 byte[] dnsLookupMessageBytes = Encoding.ASCII.GetBytes(dnsLookupMessageJson);
 
                 udpClient.SendTo(dnsLookupMessageBytes, serverEndPoint);
+                Console.WriteLine($"DNSLookup message for {dnsLookupMessage.MsgId} sent to the server.\n");
                 Console.WriteLine($"DNSLookup message for {record.Name} sent to the server.\n");
 
+
                 ReceiveDNSLookupReply(udpClient, serverEndPoint);
+                msgId++;
             }
+            return msgId;
         }
 
         private void ReceiveDNSLookupReply(Socket udpClient, IPEndPoint serverEndPoint)
@@ -145,11 +160,11 @@ namespace client
             }
         }
 
-        private void SendDNSLookupMessagesError(Socket udpClient, IPEndPoint serverEndPoint)
+        private int SendDNSLookupMessagesError(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
         {
             Message dnsLookupMessage = new()
             {
-                MsgId = 2,
+                MsgId = msgId + 1,
                 MsgType = MessageType.DNSLookup,
                 Content = "error"
             };
@@ -158,16 +173,18 @@ namespace client
             byte[] dnsLookupMessageBytes = Encoding.ASCII.GetBytes(dnsLookupMessageJson);
 
             udpClient.SendTo(dnsLookupMessageBytes, serverEndPoint);
+
             Console.WriteLine("DNSLookup message for error sent to the server.\n");
 
             ReceiveDNSLookupReply(udpClient, serverEndPoint);
+            return msgId + 1;
         }
 
         private void SendAcknowledgment(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
         {
             Message ackMessage = new()
             {
-                MsgId = msgId + 1,
+                MsgId = msgId,
                 MsgType = MessageType.Ack,
                 Content = null
             };
@@ -176,6 +193,7 @@ namespace client
             byte[] ackMessageBytes = Encoding.ASCII.GetBytes(ackMessageJson);
 
             udpClient.SendTo(ackMessageBytes, serverEndPoint);
+            Console.WriteLine($"ACK message with ID {msgId} sent to the server.\n");
             Console.WriteLine("Acknowledgment sent to the server.\n");
         }
 

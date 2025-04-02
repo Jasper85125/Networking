@@ -40,58 +40,67 @@ class ServerUDP
 
     public void Start()
     {
-        if (setting == null || string.IsNullOrEmpty(setting.ClientIPAddress) || string.IsNullOrEmpty(setting.ServerIPAddress))
+        try
         {
-            throw new InvalidOperationException("Invalid settings in configuration file.");
-        }
-
-        IPEndPoint serverEndPoint = new(IPAddress.Parse(setting.ServerIPAddress), setting.ServerPortNumber);
-        IPEndPoint clientEndPoint = new(IPAddress.Parse(setting.ClientIPAddress), setting.ClientPortNumber);
-
-        using Socket listener = new(serverEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-        listener.Bind(serverEndPoint);
-        int latestMsgId = 0;
-
-        while (true)
-        {
-            try
+            if (setting == null || string.IsNullOrEmpty(setting.ClientIPAddress) || string.IsNullOrEmpty(setting.ServerIPAddress))
             {
-                byte[] buffer = new byte[1024];
-                EndPoint remoteEndPoint = clientEndPoint;
-                int bytesReceived = listener.ReceiveFrom(buffer, ref remoteEndPoint);
+                throw new InvalidOperationException("Invalid settings in configuration file.");
+            }
 
-                string receivedMessageJson = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
-                Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
+            IPEndPoint serverEndPoint = new(IPAddress.Parse(setting.ServerIPAddress), setting.ServerPortNumber);
+            IPEndPoint clientEndPoint = new(IPAddress.Parse(setting.ClientIPAddress), setting.ClientPortNumber);
 
-                if (receivedMessage != null)
+            using Socket listener = new(serverEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+            listener.Bind(serverEndPoint);
+
+            int latestMsgId = 0;
+            while (true)
+            {
+                try
                 {
-                    Console.WriteLine($"Received message: {receivedMessage.MsgType}");
-                    latestMsgId = receivedMessage.MsgId;
+                    byte[] buffer = new byte[1024];
+                    EndPoint remoteEndPoint = clientEndPoint;
+                    int bytesReceived = listener.ReceiveFrom(buffer, ref remoteEndPoint);
 
-                    switch (receivedMessage.MsgType)
+                    string receivedMessageJson = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
+                    Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
+
+                    if (receivedMessage != null)
                     {
-                        case MessageType.Hello:
-                            latestMsgId = SendWelcomeMessage(listener, remoteEndPoint, receivedMessage.MsgId);
-                            break;
-                        case MessageType.DNSLookup:
-                            listener.ReceiveTimeout = 1000;
-                            latestMsgId = HandleDNSLookup(listener, remoteEndPoint, receivedMessage);
-                            break;
-                        case MessageType.Ack:
-                            Console.WriteLine("Received ACK from client.");
-                            break;
-                        default:
-                            Console.WriteLine("Received an invalid or unexpected message.");
-                            break;
+                        Console.WriteLine($"Received message: {receivedMessage.MsgType}");
+                        Console.WriteLine($"Message ID: {receivedMessage.MsgId}");
+                        latestMsgId = receivedMessage.MsgId;
+
+                        switch (receivedMessage.MsgType)
+                        {
+                            case MessageType.Hello:
+                                latestMsgId = SendWelcomeMessage(listener, remoteEndPoint, receivedMessage.MsgId);
+                                break;
+                            case MessageType.DNSLookup:
+                                listener.ReceiveTimeout = 1000;
+                                latestMsgId = HandleDNSLookup(listener, remoteEndPoint, receivedMessage);
+                                break;
+                            case MessageType.Ack:
+                                Console.WriteLine("Received ACK from client.");
+                                break;
+                            default:
+                                Console.WriteLine("Received an invalid or unexpected message.");
+                                break;
+                        }
                     }
                 }
+                catch (SocketException)
+                {
+                    SendEndMessage(listener, clientEndPoint, latestMsgId);
+                    listener.ReceiveTimeout = 0;
+
+                }
             }
-            catch (SocketException)
-            {
-                SendEndMessage(listener, clientEndPoint, latestMsgId);
-                listener.ReceiveTimeout = 0;
-                
-            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e.Message);
+            throw new InvalidOperationException("Invalid settings in configuration file.");
         }
     }
 
@@ -109,7 +118,7 @@ class ServerUDP
 
         listener.SendTo(welcomeMessageBytes, remoteEndPoint);
         Console.WriteLine("Sent WELCOME message to client.\n");
-        return msgId + 1;
+        return welcomeMessage.MsgId;
     }
 
     private int HandleDNSLookup(Socket listener, EndPoint remoteEndPoint, Message dnsLookupMessage)
@@ -123,7 +132,7 @@ class ServerUDP
             {
                 Message dnsLookupReplyMessage = new()
                 {
-                    MsgId = dnsLookupMessage.MsgId + 1,
+                    MsgId = dnsLookupMessage.MsgId,
                     MsgType = MessageType.DNSLookupReply,
                     Content = JsonSerializer.Serialize(foundRecord)
                 };
@@ -133,14 +142,14 @@ class ServerUDP
 
                 listener.SendTo(dnsLookupReplyMessageBytes, remoteEndPoint);
                 Console.WriteLine("Sent DNSLookupReply message to client.\n");
-                return dnsLookupMessage.MsgId + 1;
+                return dnsLookupMessage.MsgId;
             }
             else
             {
                 Console.WriteLine("lookupname was not found in DNSrecords.json.\n");
                 Message dnsLookupReplyMessage = new()
                 {
-                    MsgId = dnsLookupMessage.MsgId + 1,
+                    MsgId = dnsLookupMessage.MsgId,
                     MsgType = MessageType.Error,
                     Content = "Error: Record not found"
                 };
@@ -150,7 +159,7 @@ class ServerUDP
 
                 listener.SendTo(dnsLookupReplyMessageBytes, remoteEndPoint);
                 Console.WriteLine("Sent Error Reply message to client.\n");
-                return dnsLookupMessage.MsgId + 1;
+                return dnsLookupMessage.MsgId;
             }
         }
         else
