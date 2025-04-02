@@ -24,6 +24,23 @@ public class Setting
 
 class ServerUDP
 {
+
+    private bool IsPortInUse(int port)
+    {
+        try
+        {
+            using (Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            {
+                socket.Bind(new IPEndPoint(IPAddress.Loopback, port));
+                return false;
+            }
+        }
+        catch (SocketException)
+        {
+            return true;
+        }
+    }
+
     private readonly Setting? setting;
     private readonly List<DNSRecord>? records;
 
@@ -33,10 +50,35 @@ class ServerUDP
         string configContent = File.ReadAllText(configFile);
         setting = JsonSerializer.Deserialize<Setting>(configContent);
 
+        if (setting != null)
+        {
+            if (setting.ClientPortNumber == setting.ServerPortNumber)
+            {
+                setting.ClientPortNumber += 1; // Avoid same port for client and server
+            }
+
+            while (IsPortInUse(setting.ServerPortNumber))
+            {
+                Console.WriteLine($"Server port {setting.ServerPortNumber} is in use. Trying next port...");
+                setting.ServerPortNumber += 1;
+            }
+
+            while (IsPortInUse(setting.ClientPortNumber))
+            {
+                Console.WriteLine($"Client port {setting.ClientPortNumber} is in use. Trying next port...");
+                setting.ClientPortNumber += 1;
+            }
+
+            Console.WriteLine($"Server running on port {setting.ServerPortNumber}");
+            Console.WriteLine($"Client will use port {setting.ClientPortNumber}");
+        }
+
         string recordsFile = Path.Combine(AppContext.BaseDirectory, "../../../DNSrecords.json");
         string recordsContent = File.ReadAllText(recordsFile);
         records = JsonSerializer.Deserialize<List<DNSRecord>>(recordsContent);
     }
+
+
 
     public void Start()
     {
