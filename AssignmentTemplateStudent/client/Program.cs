@@ -91,12 +91,12 @@ namespace client
                 using Socket udpClient = new(clientEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
                 udpClient.Bind(clientEndPoint);
 
-                SendHelloMessage(udpClient, serverEndPoint);
-                int msgId = ReceiveWelcomeMessage(udpClient, serverEndPoint);
+                int msgId = SendHelloMessage(udpClient, serverEndPoint);
+                msgId = ReceiveWelcomeMessage(udpClient, serverEndPoint, msgId);
                 msgId = SendDNSLookupMessagesError(udpClient, serverEndPoint, msgId);
                 msgId = SendDNSLookupMessagesError(udpClient, serverEndPoint, msgId);
                 msgId = SendDNSLookupMessages(udpClient, serverEndPoint, msgId);
-                ReceiveEndMessage(udpClient, serverEndPoint);
+                ReceiveEndMessage(udpClient, serverEndPoint, msgId);
             }
             catch (Exception e)
             {
@@ -105,7 +105,7 @@ namespace client
             }
         }
 
-        private void SendHelloMessage(Socket udpClient, IPEndPoint serverEndPoint)
+        private int SendHelloMessage(Socket udpClient, IPEndPoint serverEndPoint)
         {
             Message helloMessage = new()
             {
@@ -119,9 +119,10 @@ namespace client
 
             udpClient.SendTo(helloMessageBytes, serverEndPoint);
             Console.WriteLine("HELLO message sent to the server.\n");
+            return helloMessage.MsgId;
         }
 
-        private int ReceiveWelcomeMessage(Socket udpClient, IPEndPoint serverEndPoint)
+        private int ReceiveWelcomeMessage(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
         {
             byte[] buffer = new byte[1024];
             EndPoint remoteEndPoint = serverEndPoint;
@@ -130,7 +131,7 @@ namespace client
             string receivedMessageJson = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
             Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
 
-            if (receivedMessage != null && receivedMessage.MsgType == MessageType.Welcome && receivedMessage.MsgId == 2)
+            if (receivedMessage != null && receivedMessage.MsgType == MessageType.Welcome && receivedMessage.MsgId == msgId + 1)
             {
                 Console.WriteLine($"Received WELCOME message from server: {receivedMessage.Content}");
                 Console.WriteLine($"Received WELCOME message from server: {receivedMessage.MsgId}");
@@ -140,7 +141,7 @@ namespace client
             {
                 Console.WriteLine("Received an invalid or unexpected message.");
             }
-            return 0;
+            return receivedMessage.MsgId;
         }
 
         private int SendDNSLookupMessages(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
@@ -171,13 +172,13 @@ namespace client
                 Console.WriteLine($"DNSLookup message for {record.Name} sent to the server.\n");
 
 
-                ReceiveDNSLookupReply(udpClient, serverEndPoint);
+                ReceiveDNSLookupReply(udpClient, serverEndPoint, dnsLookupMessage.MsgId);
                 msgId++;
             }
             return msgId;
         }
 
-        private void ReceiveDNSLookupReply(Socket udpClient, IPEndPoint serverEndPoint)
+        private void ReceiveDNSLookupReply(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
         {
             byte[] buffer = new byte[1024];
             EndPoint remoteEndPoint = serverEndPoint;
@@ -186,7 +187,7 @@ namespace client
             string receivedMessageJson = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
             Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
 
-            if (receivedMessage != null && receivedMessage.MsgType == MessageType.DNSLookupReply)
+            if (receivedMessage != null && receivedMessage.MsgType == MessageType.DNSLookupReply && receivedMessage.MsgId == msgId)
             {
                 Console.WriteLine($"Received DNSLookupReply from server: {receivedMessage.Content}");
                 SendAcknowledgment(udpClient, serverEndPoint, receivedMessage.MsgId);
@@ -218,7 +219,7 @@ namespace client
 
             Console.WriteLine("DNSLookup message for error sent to the server.\n");
 
-            ReceiveDNSLookupReply(udpClient, serverEndPoint);
+            ReceiveDNSLookupReply(udpClient, serverEndPoint, dnsLookupMessage.MsgId);
             return msgId + 1;
         }
 
@@ -239,7 +240,7 @@ namespace client
             Console.WriteLine("Acknowledgment sent to the server.\n");
         }
 
-        private void ReceiveEndMessage(Socket udpClient, IPEndPoint serverEndPoint)
+        private void ReceiveEndMessage(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
         {
             byte[] buffer = new byte[1024];
             EndPoint remoteEndPoint = serverEndPoint;
@@ -248,7 +249,7 @@ namespace client
             string receivedMessageJson = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
             Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
 
-            if (receivedMessage != null && receivedMessage.MsgType == MessageType.End)
+            if (receivedMessage != null && receivedMessage.MsgType == MessageType.End && msgId + 1 == receivedMessage.MsgId)
             {
                 Console.WriteLine("Received END message from server.");
             }

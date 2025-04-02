@@ -111,7 +111,6 @@ class ServerUDP
                     {
                         Console.WriteLine($"Received message: {receivedMessage.MsgType}");
                         Console.WriteLine($"Message ID: {receivedMessage.MsgId}");
-                        latestMsgId = receivedMessage.MsgId;
 
                         switch (receivedMessage.MsgType)
                         {
@@ -120,10 +119,10 @@ class ServerUDP
                                 break;
                             case MessageType.DNSLookup:
                                 listener.ReceiveTimeout = 1000;
-                                latestMsgId = HandleDNSLookup(listener, remoteEndPoint, receivedMessage);
+                                latestMsgId = HandleDNSLookup(listener, remoteEndPoint, receivedMessage, latestMsgId);
                                 break;
                             case MessageType.Ack:
-                                Console.WriteLine("Received ACK from client.");
+                                Console.WriteLine("Received ACK from client.\n");
                                 break;
                             default:
                                 Console.WriteLine("Received an invalid or unexpected message.");
@@ -148,67 +147,103 @@ class ServerUDP
 
     private int SendWelcomeMessage(Socket listener, EndPoint remoteEndPoint, int msgId)
     {
-        Message welcomeMessage = new()
+        if (msgId == 1)
         {
-            MsgId = msgId + 1,
-            MsgType = MessageType.Welcome,
-            Content = "Welcome to the server!"
-        };
-
-        string welcomeMessageJson = JsonSerializer.Serialize(welcomeMessage);
-        byte[] welcomeMessageBytes = Encoding.ASCII.GetBytes(welcomeMessageJson);
-
-        listener.SendTo(welcomeMessageBytes, remoteEndPoint);
-        Console.WriteLine("Sent WELCOME message to client.\n");
-        return welcomeMessage.MsgId;
-    }
-
-    private int HandleDNSLookup(Socket listener, EndPoint remoteEndPoint, Message dnsLookupMessage)
-    {
-        string? lookupName = dnsLookupMessage.Content?.ToString();
-        if (!string.IsNullOrEmpty(lookupName) && records != null)
-        {
-            DNSRecord? foundRecord = records.FirstOrDefault(record => record.Name.Equals(lookupName, StringComparison.OrdinalIgnoreCase));
-
-            if (foundRecord != null)
+            Message welcomeMessage = new()
             {
-                Message dnsLookupReplyMessage = new()
-                {
-                    MsgId = dnsLookupMessage.MsgId,
-                    MsgType = MessageType.DNSLookupReply,
-                    Content = JsonSerializer.Serialize(foundRecord)
-                };
+                MsgId = msgId + 1,
+                MsgType = MessageType.Welcome,
+                Content = "Welcome to the server!"
+            };
 
-                string dnsLookupReplyMessageJson = JsonSerializer.Serialize(dnsLookupReplyMessage);
-                byte[] dnsLookupReplyMessageBytes = Encoding.ASCII.GetBytes(dnsLookupReplyMessageJson);
+            string welcomeMessageJson = JsonSerializer.Serialize(welcomeMessage);
+            byte[] welcomeMessageBytes = Encoding.ASCII.GetBytes(welcomeMessageJson);
 
-                listener.SendTo(dnsLookupReplyMessageBytes, remoteEndPoint);
-                Console.WriteLine("Sent DNSLookupReply message to client.\n");
-                return dnsLookupMessage.MsgId;
-            }
-            else
-            {
-                Console.WriteLine("lookupname was not found in DNSrecords.json.\n");
-                Message dnsLookupReplyMessage = new()
-                {
-                    MsgId = dnsLookupMessage.MsgId,
-                    MsgType = MessageType.Error,
-                    Content = "Error: Record not found"
-                };
-
-                string dnsLookupReplyMessageJson = JsonSerializer.Serialize(dnsLookupReplyMessage);
-                byte[] dnsLookupReplyMessageBytes = Encoding.ASCII.GetBytes(dnsLookupReplyMessageJson);
-
-                listener.SendTo(dnsLookupReplyMessageBytes, remoteEndPoint);
-                Console.WriteLine("Sent Error Reply message to client.\n");
-                return dnsLookupMessage.MsgId;
-            }
+            listener.SendTo(welcomeMessageBytes, remoteEndPoint);
+            Console.WriteLine("Sent WELCOME message to client.\n");
+            return welcomeMessage.MsgId;
         }
         else
         {
-            Console.WriteLine("lookupname or DNSrecords.json is empty.\n");
+            Console.WriteLine("Received an invalid or unexpected message.\n");
+            Message errorMessage = new()
+            {
+                MsgId = msgId + 1,
+                MsgType = MessageType.Error,
+                Content = "Error: Invalid message ID"
+            };
+
+            string errorMessageJson = JsonSerializer.Serialize(errorMessage);
+            byte[] errorMessageBytes = Encoding.ASCII.GetBytes(errorMessageJson);
+
+            listener.SendTo(errorMessageBytes, remoteEndPoint);
+            Console.WriteLine("Sent Error message to client.\n");
+            return errorMessage.MsgId;
         }
-        return dnsLookupMessage.MsgId;
+        
+    }
+
+    private int HandleDNSLookup(Socket listener, EndPoint remoteEndPoint, Message dnsLookupMessage, int msgId)
+    {
+        if (msgId + 1 == dnsLookupMessage.MsgId)
+        {
+            string? lookupName = dnsLookupMessage.Content?.ToString();
+            if (!string.IsNullOrEmpty(lookupName) && records != null)
+            {
+                DNSRecord? foundRecord = records.FirstOrDefault(record => record.Name.Equals(lookupName, StringComparison.OrdinalIgnoreCase));
+
+                if (foundRecord != null)
+                {
+                    Message dnsLookupReplyMessage = new()
+                    {
+                        MsgId = dnsLookupMessage.MsgId,
+                        MsgType = MessageType.DNSLookupReply,
+                        Content = JsonSerializer.Serialize(foundRecord)
+                    };
+
+                    string dnsLookupReplyMessageJson = JsonSerializer.Serialize(dnsLookupReplyMessage);
+                    byte[] dnsLookupReplyMessageBytes = Encoding.ASCII.GetBytes(dnsLookupReplyMessageJson);
+
+                    listener.SendTo(dnsLookupReplyMessageBytes, remoteEndPoint);
+                    Console.WriteLine("Sent DNSLookupReply message to client.\n");
+                    return dnsLookupMessage.MsgId;
+                }
+                else
+                {
+                    Console.WriteLine("lookupname was not found in DNSrecords.json.\n");
+                    Message dnsLookupReplyMessage = new()
+                    {
+                        MsgId = dnsLookupMessage.MsgId,
+                        MsgType = MessageType.Error,
+                        Content = "Error: Record not found"
+                    };
+
+                    string dnsLookupReplyMessageJson = JsonSerializer.Serialize(dnsLookupReplyMessage);
+                    byte[] dnsLookupReplyMessageBytes = Encoding.ASCII.GetBytes(dnsLookupReplyMessageJson);
+
+                    listener.SendTo(dnsLookupReplyMessageBytes, remoteEndPoint);
+                    Console.WriteLine("Sent Error Reply message to client.\n");
+                    return dnsLookupMessage.MsgId;
+                }
+            }
+            else
+            {
+                Console.WriteLine("lookupname or DNSrecords.json is empty.\n");
+            }
+            return dnsLookupMessage.MsgId;
+        }
+        else
+        { 
+            Console.WriteLine("Received an invalid or unexpected message.\n");
+            Message errorMessage = new()
+            {
+                MsgId = msgId + 1,
+                MsgType = MessageType.Error,
+                Content = "Error: Invalid message ID"
+            };
+        }
+        return msgId + 1;
+        
     }
 
     private void SendEndMessage(Socket listener, EndPoint remoteEndPoint, int msgId)
