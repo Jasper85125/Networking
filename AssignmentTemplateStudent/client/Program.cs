@@ -23,8 +23,27 @@ namespace client
         public string? ClientIPAddress { get; set; }
     }
 
+
     class ClientUDP
     {
+
+        private bool IsPortInUse(int port)
+        {
+            try
+            {
+                using (Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+                {
+                    socket.Bind(new IPEndPoint(IPAddress.Loopback, port));
+                    return false;
+                }
+            }
+            catch (SocketException)
+            {
+                return true;
+            }
+        }
+
+
         private readonly Setting? setting;
 
         public ClientUDP()
@@ -32,7 +51,25 @@ namespace client
             string configFile = Path.Combine(AppContext.BaseDirectory, "../../../../Setting.json");
             string configContent = File.ReadAllText(configFile);
             setting = JsonSerializer.Deserialize<Setting>(configContent);
+
+            if (setting != null)
+            {
+                if (setting.ClientPortNumber == setting.ServerPortNumber)
+                {
+                    setting.ClientPortNumber += 1; // Avoid conflict
+                }
+
+                while (IsPortInUse(setting.ClientPortNumber))
+                {
+                    Console.WriteLine($"Client port {setting.ClientPortNumber} is in use. Trying next port...");
+                    setting.ClientPortNumber += 1;
+                }
+
+                Console.WriteLine($"Client running on port {setting.ClientPortNumber}");
+            }
         }
+
+
 
         public void Start()
         {
