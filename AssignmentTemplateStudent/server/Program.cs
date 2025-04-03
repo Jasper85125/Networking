@@ -29,7 +29,7 @@ class ServerUDP
     {
         try
         {
-            using (Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            using (Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
             {
                 socket.Bind(new IPEndPoint(IPAddress.Loopback, port));
                 return false;
@@ -127,7 +127,7 @@ class ServerUDP
                                 latestMsgId = SendWelcomeMessage(listener, remoteEndPoint, receivedMessage.MsgId);
                                 break;
                             case MessageType.DNSLookup:
-                                listener.ReceiveTimeout = 1000; // Set timeout for DNS lookup
+                                listener.ReceiveTimeout = 1000; // Set timeout for DNS lookup so when it stops receiving, it sends an END message to the client
                                 latestMsgId = HandleDNSLookup(listener, remoteEndPoint, receivedMessage, latestMsgId);
                                 break;
                             case MessageType.Ack:
@@ -143,7 +143,7 @@ class ServerUDP
                 {
                     // Send an END message to the client when a timeout occurs
                     SendEndMessage(listener, clientEndPoint, latestMsgId);
-                    listener.ReceiveTimeout = 0;
+                    listener.ReceiveTimeout = 0; // Reset the timeout to 0 to stop sending END messages
                 }
             }
         }
@@ -210,12 +210,16 @@ class ServerUDP
     // Handle a DNS lookup request from the client
     private int HandleDNSLookup(Socket listener, EndPoint remoteEndPoint, Message dnsLookupMessage, int msgId)
     {
+        // checks if the message ID is one more than the last message ID
         if (msgId + 1 == dnsLookupMessage.MsgId)
         {
             string jsonContent = JsonSerializer.Serialize(dnsLookupMessage.Content);
+            
+            //Checks if the content is a valid DNSRecord object
             DNSRecord? record = ConvertToDNSRecord(jsonContent);
             if (record == null)
             {
+                //Sends an error message to the client if the content is not a valid DNSRecord object
                 Console.WriteLine("Invalid content\n");
                 Message dnsLookupReplyMessage = new()
                 {
@@ -231,9 +235,10 @@ class ServerUDP
                 Console.WriteLine("Sent Error Reply message to client.\n");
                 return dnsLookupMessage.MsgId;
             }
+
+            //Checks if there is a valid DNSRecord that shares the name and type with the one in the content
             string? lookupName = record.Name?.ToString();
             string? lookupType = record.Type?.ToString();
-            string? lookupValue = record.Value?.ToString();
             if (!string.IsNullOrEmpty(lookupName) && records != null)
             {
                 DNSRecord? foundRecord = records.FirstOrDefault(record => record.Name.Equals(lookupName, StringComparison.OrdinalIgnoreCase)

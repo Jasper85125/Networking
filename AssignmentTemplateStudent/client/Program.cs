@@ -10,13 +10,11 @@ namespace client
     {
         static void Main()
         {
-            // Create and start the UDP client
             ClientUDP client = new ClientUDP();
             client.Start();
         }
     }
 
-    // Class to hold configuration settings
     public class Setting
     {
         public int ServerPortNumber { get; set; }
@@ -27,12 +25,12 @@ namespace client
 
     class ClientUDP
     {
-        // Check if a specific port is already in use
+        // Check if a specific port is already in use if not bind the socket.
         private bool IsPortInUse(int port)
         {
             try
             {
-                using (Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+                using (Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
                 {
                     socket.Bind(new IPEndPoint(IPAddress.Loopback, port));
                     return false;
@@ -138,6 +136,7 @@ namespace client
             string receivedMessageJson = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
             Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
 
+            //Checks if the received message is a welcome type and if the message id is correct.
             if (receivedMessage != null && receivedMessage.MsgType == MessageType.Welcome && receivedMessage.MsgId == msgId + 1)
             {
                 Console.WriteLine($"Received WELCOME message from server: {receivedMessage.Content}");
@@ -169,6 +168,7 @@ namespace client
                 throw new InvalidOperationException("Failed to load DNS records.");
             }
 
+            // Send DNS lookup messages for each record in DNSrecords.json
             foreach (var record in dnsRecords)
             {
                 Message dnsLookupMessage = new()
@@ -185,6 +185,7 @@ namespace client
                 Console.WriteLine($"DNSLookup message for {dnsLookupMessage.MsgId} sent to the server.\n");
                 Console.WriteLine($"DNSLookup message for {record.Name} sent to the server.\n");
 
+                //Waits for the server to respond with a DNSLookupReply message.
                 ReceiveDNSLookupReply(udpClient, serverEndPoint, dnsLookupMessage.MsgId);
                 msgId++;
             }
@@ -201,6 +202,7 @@ namespace client
             string receivedMessageJson = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
             Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
 
+            //Checks if the received message is a DNSLookupReply type and if the message id is correct.
             if (receivedMessage != null && receivedMessage.MsgType == MessageType.DNSLookupReply && receivedMessage.MsgId == msgId)
             {
                 Console.WriteLine($"Received DNSLookupReply from server: {receivedMessage.Content}");
