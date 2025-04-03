@@ -167,7 +167,7 @@ namespace client
                 {
                     MsgId = msgId + 1,
                     MsgType = MessageType.DNSLookup,
-                    Content = record.Name
+                    Content = record
                 };
 
                 string dnsLookupMessageJson = JsonSerializer.Serialize(dnsLookupMessage);
@@ -211,11 +211,19 @@ namespace client
 
         private int SendDNSLookupMessagesError(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
         {
+            // DNSRecord errorRecord = new()
+            // {
+            //     Type = "Bruh",
+            //     Name = "epicgames.com",
+            //     Value = null,
+            //     TTL = null,
+            //     Priority = null
+            // };
             Message dnsLookupMessage = new()
             {
                 MsgId = msgId + 1,
                 MsgType = MessageType.DNSLookup,
-                Content = "error"
+                Content = "error"//errorRecord
             };
 
             string dnsLookupMessageJson = JsonSerializer.Serialize(dnsLookupMessage);

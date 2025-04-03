@@ -183,14 +183,51 @@ class ServerUDP
         
     }
 
+    public static DNSRecord ConvertToDNSRecord(string message)
+    {
+        try
+        {
+            DNSRecord? record = JsonSerializer.Deserialize<DNSRecord>(message);
+            return record;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deserializing DNSRecord");
+            return null;
+        }
+        
+    }
+
     private int HandleDNSLookup(Socket listener, EndPoint remoteEndPoint, Message dnsLookupMessage, int msgId)
     {
         if (msgId + 1 == dnsLookupMessage.MsgId)
         {
-            string? lookupName = dnsLookupMessage.Content?.ToString();
+            string jsonContent = JsonSerializer.Serialize(dnsLookupMessage.Content);
+            DNSRecord? record = ConvertToDNSRecord(jsonContent);
+            if (record == null)
+            {
+                Console.WriteLine("Invalid content\n");
+                    Message dnsLookupReplyMessage = new()
+                    {
+                        MsgId = dnsLookupMessage.MsgId,
+                        MsgType = MessageType.Error,
+                        Content = "Error: Invalid content"
+                    };
+
+                    string dnsLookupReplyMessageJson = JsonSerializer.Serialize(dnsLookupReplyMessage);
+                    byte[] dnsLookupReplyMessageBytes = Encoding.ASCII.GetBytes(dnsLookupReplyMessageJson);
+
+                    listener.SendTo(dnsLookupReplyMessageBytes, remoteEndPoint);
+                    Console.WriteLine("Sent Error Reply message to client.\n");
+                    return dnsLookupMessage.MsgId;
+            }
+            string? lookupName = record.Name?.ToString();
+            string? lookupType = record.Type?.ToString();
+            string? lookupValue = record.Value?.ToString();
             if (!string.IsNullOrEmpty(lookupName) && records != null)
             {
-                DNSRecord? foundRecord = records.FirstOrDefault(record => record.Name.Equals(lookupName, StringComparison.OrdinalIgnoreCase));
+                DNSRecord? foundRecord = records.FirstOrDefault(record => record.Name.Equals(lookupName, StringComparison.OrdinalIgnoreCase) 
+                                                                && record.Type.Equals(lookupType, StringComparison.OrdinalIgnoreCase));
 
                 if (foundRecord != null)
                 {
