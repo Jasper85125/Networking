@@ -9,6 +9,7 @@ class Program
 {
     static void Main(string[] args)
     {
+        // Initialize and start the UDP server
         ServerUDP server = new ServerUDP();
         server.Start();
     }
@@ -16,6 +17,7 @@ class Program
 
 public class Setting
 {
+    // Configuration settings for the server and client
     public int ServerPortNumber { get; set; }
     public string? ServerIPAddress { get; set; }
     public int ClientPortNumber { get; set; }
@@ -24,7 +26,7 @@ public class Setting
 
 class ServerUDP
 {
-
+    // Check if a specific port is already in use
     private bool IsPortInUse(int port)
     {
         try
@@ -41,28 +43,32 @@ class ServerUDP
         }
     }
 
-    private readonly Setting? setting;
-    private readonly List<DNSRecord>? records;
+    private readonly Setting? setting; // Server and client settings
+    private readonly List<DNSRecord>? records; // List of DNS records
 
     public ServerUDP()
     {
+        // Load server and client settings from Setting.json
         string configFile = Path.Combine(AppContext.BaseDirectory, "../../../../Setting.json");
         string configContent = File.ReadAllText(configFile);
         setting = JsonSerializer.Deserialize<Setting>(configContent);
 
         if (setting != null)
         {
+            // Ensure client and server do not use the same port
             if (setting.ClientPortNumber == setting.ServerPortNumber)
             {
-                setting.ClientPortNumber += 1; // Avoid same port for client and server
+                setting.ClientPortNumber += 1;
             }
 
+            // Find an available port for the server
             while (IsPortInUse(setting.ServerPortNumber))
             {
                 Console.WriteLine($"Server port {setting.ServerPortNumber} is in use. Trying next port...");
                 setting.ServerPortNumber += 1;
             }
 
+            // Find an available port for the client
             while (IsPortInUse(setting.ClientPortNumber))
             {
                 Console.WriteLine($"Client port {setting.ClientPortNumber} is in use. Trying next port...");
@@ -73,37 +79,41 @@ class ServerUDP
             Console.WriteLine($"Client will use port {setting.ClientPortNumber}");
         }
 
+        // Load DNS records from DNSrecords.json
         string recordsFile = Path.Combine(AppContext.BaseDirectory, "../../../DNSrecords.json");
         string recordsContent = File.ReadAllText(recordsFile);
         records = JsonSerializer.Deserialize<List<DNSRecord>>(recordsContent);
     }
 
-
-
     public void Start()
     {
         try
         {
+            // Validate settings
             if (setting == null || string.IsNullOrEmpty(setting.ClientIPAddress) || string.IsNullOrEmpty(setting.ServerIPAddress))
             {
                 throw new InvalidOperationException("Invalid settings in configuration file.");
             }
 
+            // Create server and client endpoints
             IPEndPoint serverEndPoint = new(IPAddress.Parse(setting.ServerIPAddress), setting.ServerPortNumber);
             IPEndPoint clientEndPoint = new(IPAddress.Parse(setting.ClientIPAddress), setting.ClientPortNumber);
 
+            // Create a UDP socket and bind it to the server endpoint
             using Socket listener = new(serverEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
             listener.Bind(serverEndPoint);
 
-            int latestMsgId = 0;
+            int latestMsgId = 0; // Track the latest message ID
             while (true)
             {
                 try
                 {
+                    // Receive data from the client
                     byte[] buffer = new byte[1024];
                     EndPoint remoteEndPoint = clientEndPoint;
                     int bytesReceived = listener.ReceiveFrom(buffer, ref remoteEndPoint);
 
+                    // Deserialize the received message
                     string receivedMessageJson = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
                     Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
 
@@ -112,13 +122,14 @@ class ServerUDP
                         Console.WriteLine($"Received message: {receivedMessage.MsgType}");
                         Console.WriteLine($"Message ID: {receivedMessage.MsgId}");
 
+                        // Handle the message based on its type
                         switch (receivedMessage.MsgType)
                         {
                             case MessageType.Hello:
                                 latestMsgId = SendWelcomeMessage(listener, remoteEndPoint, receivedMessage.MsgId);
                                 break;
                             case MessageType.DNSLookup:
-                                listener.ReceiveTimeout = 1000;
+                                listener.ReceiveTimeout = 1000; // Set timeout for DNS lookup
                                 latestMsgId = HandleDNSLookup(listener, remoteEndPoint, receivedMessage, latestMsgId);
                                 break;
                             case MessageType.Ack:
@@ -132,9 +143,9 @@ class ServerUDP
                 }
                 catch (SocketException)
                 {
+                    // Send an END message to the client when a timeout occurs
                     SendEndMessage(listener, clientEndPoint, latestMsgId);
                     listener.ReceiveTimeout = 0;
-
                 }
             }
         }
@@ -145,6 +156,7 @@ class ServerUDP
         }
     }
 
+    // Send a welcome message to the client
     private int SendWelcomeMessage(Socket listener, EndPoint remoteEndPoint, int msgId)
     {
         if (msgId == 1)
@@ -180,9 +192,9 @@ class ServerUDP
             Console.WriteLine("Sent Error message to client.\n");
             return errorMessage.MsgId;
         }
-        
     }
 
+    // Convert a JSON string to a DNSRecord object
     public static DNSRecord ConvertToDNSRecord(string message)
     {
         try
@@ -195,9 +207,9 @@ class ServerUDP
             Console.WriteLine($"Error deserializing DNSRecord");
             return null;
         }
-        
     }
 
+    // Handle a DNS lookup request from the client
     private int HandleDNSLookup(Socket listener, EndPoint remoteEndPoint, Message dnsLookupMessage, int msgId)
     {
         if (msgId + 1 == dnsLookupMessage.MsgId)
@@ -207,26 +219,26 @@ class ServerUDP
             if (record == null)
             {
                 Console.WriteLine("Invalid content\n");
-                    Message dnsLookupReplyMessage = new()
-                    {
-                        MsgId = dnsLookupMessage.MsgId,
-                        MsgType = MessageType.Error,
-                        Content = "Error: Invalid content"
-                    };
+                Message dnsLookupReplyMessage = new()
+                {
+                    MsgId = dnsLookupMessage.MsgId,
+                    MsgType = MessageType.Error,
+                    Content = "Error: Invalid content"
+                };
 
-                    string dnsLookupReplyMessageJson = JsonSerializer.Serialize(dnsLookupReplyMessage);
-                    byte[] dnsLookupReplyMessageBytes = Encoding.ASCII.GetBytes(dnsLookupReplyMessageJson);
+                string dnsLookupReplyMessageJson = JsonSerializer.Serialize(dnsLookupReplyMessage);
+                byte[] dnsLookupReplyMessageBytes = Encoding.ASCII.GetBytes(dnsLookupReplyMessageJson);
 
-                    listener.SendTo(dnsLookupReplyMessageBytes, remoteEndPoint);
-                    Console.WriteLine("Sent Error Reply message to client.\n");
-                    return dnsLookupMessage.MsgId;
+                listener.SendTo(dnsLookupReplyMessageBytes, remoteEndPoint);
+                Console.WriteLine("Sent Error Reply message to client.\n");
+                return dnsLookupMessage.MsgId;
             }
             string? lookupName = record.Name?.ToString();
             string? lookupType = record.Type?.ToString();
             string? lookupValue = record.Value?.ToString();
             if (!string.IsNullOrEmpty(lookupName) && records != null)
             {
-                DNSRecord? foundRecord = records.FirstOrDefault(record => record.Name.Equals(lookupName, StringComparison.OrdinalIgnoreCase) 
+                DNSRecord? foundRecord = records.FirstOrDefault(record => record.Name.Equals(lookupName, StringComparison.OrdinalIgnoreCase)
                                                                 && record.Type.Equals(lookupType, StringComparison.OrdinalIgnoreCase));
 
                 if (foundRecord != null)
@@ -270,7 +282,7 @@ class ServerUDP
             return dnsLookupMessage.MsgId;
         }
         else
-        { 
+        {
             Console.WriteLine($"Received an invalid or unexpected message. The message ID should be {msgId + 1}\n");
             Message errorMessage = new()
             {
@@ -284,9 +296,9 @@ class ServerUDP
             Console.WriteLine("Sent Error message to client.\n");
         }
         return msgId + 1;
-        
     }
 
+    // Send an END message to the client
     private void SendEndMessage(Socket listener, EndPoint remoteEndPoint, int msgId)
     {
         Message endMessage = new()
