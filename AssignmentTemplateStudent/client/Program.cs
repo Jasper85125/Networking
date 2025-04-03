@@ -10,11 +10,13 @@ namespace client
     {
         static void Main()
         {
+            // Create and start the UDP client
             ClientUDP client = new ClientUDP();
             client.Start();
         }
     }
 
+    // Class to hold configuration settings
     public class Setting
     {
         public int ServerPortNumber { get; set; }
@@ -23,10 +25,9 @@ namespace client
         public string? ClientIPAddress { get; set; }
     }
 
-
     class ClientUDP
     {
-
+        // Check if a specific port is already in use
         private bool IsPortInUse(int port)
         {
             try
@@ -43,22 +44,24 @@ namespace client
             }
         }
 
-
         private readonly Setting? setting;
 
         public ClientUDP()
         {
+            // Load configuration settings from a JSON file
             string configFile = Path.Combine(AppContext.BaseDirectory, "../../../../Setting.json");
             string configContent = File.ReadAllText(configFile);
             setting = JsonSerializer.Deserialize<Setting>(configContent);
 
             if (setting != null)
             {
+                // Ensure client and server ports do not conflict
                 if (setting.ClientPortNumber == setting.ServerPortNumber)
                 {
                     setting.ClientPortNumber += 1; // Avoid conflict
                 }
 
+                // Find an available port for the client
                 while (IsPortInUse(setting.ClientPortNumber))
                 {
                     Console.WriteLine($"Client port {setting.ClientPortNumber} is in use. Trying next port...");
@@ -69,12 +72,11 @@ namespace client
             }
         }
 
-
-
         public void Start()
         {
             try
             {
+                // Validate configuration settings
                 if (setting == null || string.IsNullOrEmpty(setting.ClientIPAddress) || string.IsNullOrEmpty(setting.ServerIPAddress))
                 {
                     throw new InvalidOperationException("Invalid settings in configuration file.");
@@ -85,12 +87,15 @@ namespace client
                     throw new InvalidOperationException("Client and server port numbers cannot be the same.");
                 }
 
+                // Define client and server endpoints
                 IPEndPoint clientEndPoint = new(IPAddress.Parse(setting.ClientIPAddress), setting.ClientPortNumber);
                 IPEndPoint serverEndPoint = new(IPAddress.Parse(setting.ServerIPAddress), setting.ServerPortNumber);
 
+                // Create and bind the UDP socket
                 using Socket udpClient = new(clientEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
                 udpClient.Bind(clientEndPoint);
 
+                // Communication sequence with the server
                 int msgId = SendHelloMessage(udpClient, serverEndPoint);
                 msgId = ReceiveWelcomeMessage(udpClient, serverEndPoint, msgId);
                 msgId = SendDNSLookupMessagesError(udpClient, serverEndPoint, msgId);
@@ -105,6 +110,7 @@ namespace client
             }
         }
 
+        // Send a HELLO message to the server
         private int SendHelloMessage(Socket udpClient, IPEndPoint serverEndPoint)
         {
             Message helloMessage = new()
@@ -122,6 +128,7 @@ namespace client
             return helloMessage.MsgId;
         }
 
+        // Receive a WELCOME message from the server
         private int ReceiveWelcomeMessage(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
         {
             byte[] buffer = new byte[1024];
@@ -150,6 +157,7 @@ namespace client
             return receivedMessage.MsgId;
         }
 
+        // Send DNS lookup messages to the server
         private int SendDNSLookupMessages(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
         {
             string dnsRecordsFile = Path.Combine(AppContext.BaseDirectory, "../../../../server/DNSrecords.json");
@@ -177,13 +185,13 @@ namespace client
                 Console.WriteLine($"DNSLookup message for {dnsLookupMessage.MsgId} sent to the server.\n");
                 Console.WriteLine($"DNSLookup message for {record.Name} sent to the server.\n");
 
-
                 ReceiveDNSLookupReply(udpClient, serverEndPoint, dnsLookupMessage.MsgId);
                 msgId++;
             }
             return msgId;
         }
 
+        // Receive DNS lookup reply from the server
         private void ReceiveDNSLookupReply(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
         {
             byte[] buffer = new byte[1024];
@@ -209,21 +217,14 @@ namespace client
             }
         }
 
+        // Send DNS lookup messages with errors to the server
         private int SendDNSLookupMessagesError(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
         {
-            // DNSRecord errorRecord = new()
-            // {
-            //     Type = "Bruh",
-            //     Name = "epicgames.com",
-            //     Value = null,
-            //     TTL = null,
-            //     Priority = null
-            // };
             Message dnsLookupMessage = new()
             {
                 MsgId = msgId + 1,
                 MsgType = MessageType.DNSLookup,
-                Content = "error"//errorRecord
+                Content = "error" // Simulated error content
             };
 
             string dnsLookupMessageJson = JsonSerializer.Serialize(dnsLookupMessage);
@@ -237,6 +238,7 @@ namespace client
             return msgId + 1;
         }
 
+        // Send an acknowledgment message to the server
         private void SendAcknowledgment(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
         {
             Message ackMessage = new()
@@ -254,6 +256,7 @@ namespace client
             Console.WriteLine("Acknowledgment sent to the server.\n");
         }
 
+        // Receive the END message from the server
         private void ReceiveEndMessage(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
         {
             byte[] buffer = new byte[1024];
