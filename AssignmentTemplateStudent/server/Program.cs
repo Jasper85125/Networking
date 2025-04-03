@@ -9,7 +9,6 @@ class Program
 {
     static void Main(string[] args)
     {
-        // Initialize and start the UDP server
         ServerUDP server = new ServerUDP();
         server.Start();
     }
@@ -17,7 +16,6 @@ class Program
 
 public class Setting
 {
-    // Configuration settings for the server and client
     public int ServerPortNumber { get; set; }
     public string? ServerIPAddress { get; set; }
     public int ClientPortNumber { get; set; }
