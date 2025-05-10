@@ -1,82 +1,281 @@
-﻿using System.Collections.Immutable;
-using System.ComponentModel;
-using System.Net;
+﻿using System.Net;
 using System.Net.Sockets;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using LibData;
 
-// SendTo();
-class Program
+namespace client
 {
-    static void Main(string[] args)
+    class Program
     {
-        ClientUDP.start();
-    }
-}
-
-public class Setting
-{
-    public int ServerPortNumber { get; set; }
-    public string? ServerIPAddress { get; set; }
-    public int ClientPortNumber { get; set; }
-    public string? ClientIPAddress { get; set; }
-}
-
-class ClientUDP
-{
-
-    //TODO: [Deserialize Setting.json]
-    static string configFile = @"../Setting.json";
-    static string configContent = File.ReadAllText(configFile);
-    static Setting? setting = JsonSerializer.Deserialize<Setting>(configContent);
-
-
-    public static void start()
-    {
-
-        //TODO: [Create endpoints and socket]
-        if (setting == null || string.IsNullOrEmpty(setting.ClientIPAddress) || string.IsNullOrEmpty(setting.ServerIPAddress))
+        static void Main()
         {
-            throw new InvalidOperationException("Invalid settings in configuration file.");
+            ClientUDP client = new ClientUDP();
+            client.Start();
+        }
+    }
+
+    public class Setting
+    {
+        public int ServerPortNumber { get; set; }
+        public string? ServerIPAddress { get; set; }
+        public int ClientPortNumber { get; set; }
+        public string? ClientIPAddress { get; set; }
+    }
+
+    class ClientUDP
+    {
+        // Check if a specific port is already in use if not bind the socket.
+        private bool IsPortInUse(int port)
+        {
+            try
+            {
+                using (Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
+                {
+                    socket.Bind(new IPEndPoint(IPAddress.Loopback, port));
+                    return false;
+                }
+            }
+            catch (SocketException)
+            {
+                return true;
+            }
         }
 
-        IPAddress clientIPAddress = IPAddress.Parse(setting.ClientIPAddress);
-        int clientPortNumber = setting.ClientPortNumber;
-        IPEndPoint clientEndPoint = new IPEndPoint(clientIPAddress, clientPortNumber);
+        private readonly Setting? setting;
 
-        IPAddress serverIPAddress = IPAddress.Parse(setting.ServerIPAddress);
-        int serverPortNumber = setting.ServerPortNumber;
-        IPEndPoint serverEndPoint = new IPEndPoint(serverIPAddress, serverPortNumber);
+        public ClientUDP()
+        {
+            // Load configuration settings from a JSON file
+            string configFile = Path.Combine(AppContext.BaseDirectory, "../../../../Setting.json");
+            string configContent = File.ReadAllText(configFile);
+            setting = JsonSerializer.Deserialize<Setting>(configContent);
 
+            if (setting != null)
+            {
+                // Ensure client and server ports do not conflict
+                if (setting.ClientPortNumber == setting.ServerPortNumber)
+                {
+                    setting.ClientPortNumber += 1; // Avoid conflict
+                }
 
-        //TODO: [Create and send HELLO]
-        UdpClient client = new UdpClient(clientEndPoint);
-        byte[] hello = Encoding.ASCII.GetBytes("HELLO");
-        client.Send(hello, hello.Length, serverEndPoint);
+                // Find an available port for the client
+                while (IsPortInUse(setting.ClientPortNumber))
+                {
+                    Console.WriteLine($"Client port {setting.ClientPortNumber} is in use. Trying next port...");
+                    setting.ClientPortNumber += 1;
+                }
 
+                Console.WriteLine($"Client running on port {setting.ClientPortNumber}");
+            }
+        }
 
-        //TODO: [Receive and print Welcome from server]
+        public void Start()
+        {
+            try
+            {
+                // Validate configuration settings
+                if (setting == null || string.IsNullOrEmpty(setting.ClientIPAddress) || string.IsNullOrEmpty(setting.ServerIPAddress))
+                {
+                    throw new InvalidOperationException("Invalid settings in configuration file.");
+                }
 
-        // TODO: [Create and send DNSLookup Message]
+                if (setting.ClientPortNumber == setting.ServerPortNumber)
+                {
+                    throw new InvalidOperationException("Client and server port numbers cannot be the same.");
+                }
 
+                // Define client and server endpoints
+                IPEndPoint clientEndPoint = new(IPAddress.Parse(setting.ClientIPAddress), setting.ClientPortNumber);
+                IPEndPoint serverEndPoint = new(IPAddress.Parse(setting.ServerIPAddress), setting.ServerPortNumber);
 
-        //TODO: [Receive and print DNSLookupReply from server]
+                // Create and bind the UDP socket
+                using Socket udpClient = new(clientEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+                udpClient.Bind(clientEndPoint);
 
+                // Communication sequence with the server
+                int msgId = SendHelloMessage(udpClient, serverEndPoint);
+                msgId = ReceiveWelcomeMessage(udpClient, serverEndPoint, msgId);
+                msgId = SendDNSLookupMessagesError(udpClient, serverEndPoint, msgId);
+                msgId = SendDNSLookupMessagesError(udpClient, serverEndPoint, msgId);
+                msgId = SendDNSLookupMessages(udpClient, serverEndPoint, msgId);
+                ReceiveEndMessage(udpClient, serverEndPoint, msgId);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"An error occurred: {e.Message}");
+                throw new InvalidOperationException("Invalid settings in configuration file.");
+            }
+        }
 
-        //TODO: [Send Acknowledgment to Server]
+        // Send a HELLO message to the server
+        private int SendHelloMessage(Socket udpClient, IPEndPoint serverEndPoint)
+        {
+            Message helloMessage = new()
+            {
+                MsgId = 1,
+                MsgType = MessageType.Hello,
+                Content = null
+            };
 
-        // TODO: [Send next DNSLookup to server]
-        // repeat the process until all DNSLoopkups (correct and incorrect onces) are sent to server and the replies with DNSLookupReply
+            string helloMessageJson = JsonSerializer.Serialize(helloMessage);
+            byte[] helloMessageBytes = Encoding.ASCII.GetBytes(helloMessageJson);
 
-        //TODO: [Receive and print End from server]
+            udpClient.SendTo(helloMessageBytes, serverEndPoint);
+            Console.WriteLine("HELLO message sent to the server.\n");
+            return helloMessage.MsgId;
+        }
 
+        // Receive a WELCOME message from the server
+        private int ReceiveWelcomeMessage(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
+        {
+            byte[] buffer = new byte[1024];
+            EndPoint remoteEndPoint = serverEndPoint;
+            int bytesReceived = udpClient.ReceiveFrom(buffer, ref remoteEndPoint);
 
+            string receivedMessageJson = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
+            Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
 
+            //Checks if the received message is a welcome type and if the message id is correct.
+            if (receivedMessage != null && receivedMessage.MsgType == MessageType.Welcome && receivedMessage.MsgId == msgId + 1)
+            {
+                Console.WriteLine($"Received WELCOME message from server: {receivedMessage.Content}");
+                Console.WriteLine($"Received WELCOME message from server: {receivedMessage.MsgId}");
+                return receivedMessage.MsgId;
+            }
+            else if (receivedMessage.MsgType == MessageType.Error)
+            {
+                Console.WriteLine("Received an invalid or unexpected message.");
+                Console.WriteLine($"Received {receivedMessage.MsgType}");
+            }
+            else if (receivedMessage.MsgId != msgId + 1)
+            {
+                Console.WriteLine("Received an invalid or unexpected message.");
+                Console.WriteLine($"received message id: {receivedMessage.MsgId}, but should be {msgId + 1}");
+            }
+            return receivedMessage.MsgId;
+        }
 
+        // Send DNS lookup messages to the server
+        private int SendDNSLookupMessages(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
+        {
+            string dnsRecordsFile = Path.Combine(AppContext.BaseDirectory, "../../../../server/DNSrecords.json");
+            string dnsRecordsContent = File.ReadAllText(dnsRecordsFile);
+            var dnsRecords = JsonSerializer.Deserialize<List<DNSRecord>>(dnsRecordsContent);
 
+            if (dnsRecords == null)
+            {
+                throw new InvalidOperationException("Failed to load DNS records.");
+            }
+
+            // Send DNS lookup messages for each record in DNSrecords.json
+            foreach (var record in dnsRecords)
+            {
+                Message dnsLookupMessage = new()
+                {
+                    MsgId = msgId + 1,
+                    MsgType = MessageType.DNSLookup,
+                    Content = record
+                };
+
+                string dnsLookupMessageJson = JsonSerializer.Serialize(dnsLookupMessage);
+                byte[] dnsLookupMessageBytes = Encoding.ASCII.GetBytes(dnsLookupMessageJson);
+
+                udpClient.SendTo(dnsLookupMessageBytes, serverEndPoint);
+                Console.WriteLine($"DNSLookup message for {dnsLookupMessage.MsgId} sent to the server.\n");
+                Console.WriteLine($"DNSLookup message for {record.Name} sent to the server.\n");
+
+                //Waits for the server to respond with a DNSLookupReply message.
+                ReceiveDNSLookupReply(udpClient, serverEndPoint, dnsLookupMessage.MsgId);
+                msgId++;
+            }
+            return msgId;
+        }
+
+        // Receive DNS lookup reply from the server
+        private void ReceiveDNSLookupReply(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
+        {
+            byte[] buffer = new byte[1024];
+            EndPoint remoteEndPoint = serverEndPoint;
+            int bytesReceived = udpClient.ReceiveFrom(buffer, ref remoteEndPoint);
+
+            string receivedMessageJson = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
+            Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
+
+            //Checks if the received message is a DNSLookupReply type and if the message id is correct.
+            if (receivedMessage != null && receivedMessage.MsgType == MessageType.DNSLookupReply && receivedMessage.MsgId == msgId)
+            {
+                Console.WriteLine($"Received DNSLookupReply from server: {receivedMessage.Content}");
+                SendAcknowledgment(udpClient, serverEndPoint, receivedMessage.MsgId);
+            }
+            else if (receivedMessage != null && receivedMessage.MsgType == MessageType.Error)
+            {
+                Console.WriteLine($"Received ERROR message from server: {receivedMessage.Content}");
+                SendAcknowledgment(udpClient, serverEndPoint, receivedMessage.MsgId);
+            }
+            else
+            {
+                Console.WriteLine("Received an invalid or unexpected message.");
+            }
+        }
+
+        // Send DNS lookup messages with errors to the server
+        private int SendDNSLookupMessagesError(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
+        {
+            Message dnsLookupMessage = new()
+            {
+                MsgId = msgId + 1,
+                MsgType = MessageType.DNSLookup,
+                Content = "error" // Simulated error content
+            };
+
+            string dnsLookupMessageJson = JsonSerializer.Serialize(dnsLookupMessage);
+            byte[] dnsLookupMessageBytes = Encoding.ASCII.GetBytes(dnsLookupMessageJson);
+
+            udpClient.SendTo(dnsLookupMessageBytes, serverEndPoint);
+
+            Console.WriteLine("DNSLookup message for error sent to the server.\n");
+
+            ReceiveDNSLookupReply(udpClient, serverEndPoint, dnsLookupMessage.MsgId);
+            return msgId + 1;
+        }
+
+        // Send an acknowledgment message to the server
+        private void SendAcknowledgment(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
+        {
+            Message ackMessage = new()
+            {
+                MsgId = msgId,
+                MsgType = MessageType.Ack,
+                Content = null
+            };
+
+            string ackMessageJson = JsonSerializer.Serialize(ackMessage);
+            byte[] ackMessageBytes = Encoding.ASCII.GetBytes(ackMessageJson);
+
+            udpClient.SendTo(ackMessageBytes, serverEndPoint);
+            Console.WriteLine($"ACK message with ID {msgId} sent to the server.\n");
+            Console.WriteLine("Acknowledgment sent to the server.\n");
+        }
+
+        // Receive the END message from the server
+        private void ReceiveEndMessage(Socket udpClient, IPEndPoint serverEndPoint, int msgId)
+        {
+            byte[] buffer = new byte[1024];
+            EndPoint remoteEndPoint = serverEndPoint;
+            int bytesReceived = udpClient.ReceiveFrom(buffer, ref remoteEndPoint);
+
+            string receivedMessageJson = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
+            Message? receivedMessage = JsonSerializer.Deserialize<Message>(receivedMessageJson);
+
+            if (receivedMessage != null && receivedMessage.MsgType == MessageType.End && msgId + 1 == receivedMessage.MsgId)
+            {
+                Console.WriteLine("Received END message from server.");
+            }
+            else
+            {
+                Console.WriteLine("Received an invalid or unexpected message.");
+            }
+        }
     }
 }
